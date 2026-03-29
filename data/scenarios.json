@@ -1,0 +1,22 @@
+[
+  {
+    "failure_type": "OOMKilled",
+    "expected_action": "scale_memory",
+    "expected_params": { "memory": "1Gi" }
+  },
+  {
+    "failure_type": "CrashLoopBackOff",
+    "expected_action": "reset_and_redeploy",
+    "expected_params": { "restart_count": 0, "status": "running" }
+  },
+  {
+    "failure_type": "StartupProbeFailed",
+    "expected_action": "fix_port",
+    "expected_params": { "port": 8080 }
+  },
+  {
+    "failure_type": "HighLatency",
+    "expected_action": "scale_instances",
+    "expected_params": { "max_instances": 3 }
+  }
+]

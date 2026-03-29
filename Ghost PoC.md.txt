@@ -1,0 +1,743 @@
+# GHOST POC â€” Build Specification
+## Grid Homeostasis & Orchestrated Self-healing Topology
+
+---
+
+## The Problem
+
+Containerised services fail at runtime while humans are not watching.
+
+A container crashes. Logs pile up. Nobody acts until someone is paged, wakes up,
+logs in, reads the logs, understands the context, and manually executes a fix.
+In that window â€” whether 10 minutes or 2 hours â€” the service is degraded or down.
+
+The tools to detect and fix these failures already exist. The missing piece is the
+**autonomous loop** that connects detection to action without a human in the middle.
+
+### The Precise Question This POC Answers
+
+> Can a lightweight agent system detect a known container runtime failure from a log
+> stream and execute the correct corrective action â€” faster and more reliably than a
+> human â€” with zero human input after start?
+
+One question. One measurable outcome.
+**MTTR (Mean Time To Resolve) with humans vs MTTR without humans.**
+
+---
+
+## What We Are NOT Building
+
+- Not a full SRE platform
+- Not a production system
+- Not a cloud-connected agent
+- Not an LLM-first system
+- Not a framework evaluation
+- Not specific to any workload type â€” web API, worker, database sidecar, batch job,
+  or anything else running in a container
+
+We are building the **minimum loop** that proves autonomous detection and resolution
+works on synthetic log data. Nothing more.
+
+---
+
+## The Failure Domain
+
+We are operating entirely in **container runtime failures** â€” things that go wrong
+on infrastructure that is already running and already deployed. These four failure
+modes account for the majority of unplanned downtime on containerised workloads
+regardless of what is running inside the container:
+
+| Failure | What Happens | Root Cause Class |
+|---|---|---|
+| OOMKilled | Kernel kills the process for exceeding memory limit | Resource ceiling too low |
+| CrashLoopBackOff | Container fails to start repeatedly | Config error at startup |
+| StartupProbeFailed | Health check fails, platform marks service unhealthy | Misconfiguration |
+| HighLatency | Service running but response time exceeds threshold | Insufficient capacity |
+
+These are **container runtime primitives**. Workload-agnostic. The Watcher does not
+care what is inside the container. The Healer does not care what the service does.
+
+### What We Are NOT Mitigating
+
+- IaC failures â€” Terraform drift, wrong IAM role at provision time
+- Cluster failures â€” node not ready, control plane unreachable
+- Network failures â€” DNS, firewall, load balancer
+- Storage failures â€” mount issues, corrupted data
+- Security incidents â€” anomalous access, credential compromise
+
+---
+
+## The Two Agents
+
+### Watcher
+**Job:** Read a continuous log stream. Detect known failure signatures. Emit a
+structured event when a failure is found.
+
+**What it is:** A loop with pattern matching. Approximately 80 lines of Python.
+No framework. No LLM. Pure deterministic logic.
+
+### Healer
+**Job:** Receive a structured event from Watcher. Look up the correct action.
+Execute that action against the infrastructure state. Record the outcome.
+
+**What it is:** An event handler with a decision lookup table. Approximately 60
+lines of Python. No framework. No LLM.
+
+### How They Connect
+A single `asyncio.Queue` â€” Python built-in, zero setup. Watcher puts events in.
+Healer reads events out. This is the loop.
+
+---
+
+## Infrastructure State (Fake Container Platform)
+
+No real cloud account. No real cluster. No API keys.
+
+```python
+infra_state = {
+    "app-service": {
+        "status": "running",        # running | crashed | degraded
+        "memory": "512Mi",
+        "min_instances": 1,
+        "max_instances": 1,
+        "port": 9090,               # deliberately wrong in some scenarios
+        "restart_count": 0,
+        "latency_ms": 200
+    }
+}
+```
+
+Actions mutate this dictionary. The loop is fully self-contained.
+
+---
+
+## Agent Skills
+
+Each agent has a **skills file** â€” a plain Python file that declares exactly what
+that agent can and cannot do. Skills files are the **single source of truth** for
+agent capability. Agents import from their skills file â€” they never define patterns
+or decision tables inline.
+
+---
+
+### `skills/watcher_skills.py`
+
+```python
+# skills/watcher_skills.py
+
+AGENT_NAME = "watcher"
+AGENT_VERSION = "1.0.0"
+
+# What the Watcher looks for.
+# Each entry: failure_type -> list of strings.
+# Match fires if ANY string in the list appears in the log message (OR logic).
+# Generic container runtime signatures â€” workload-agnostic.
+DETECTABLE_PATTERNS = {
+    "OOMKilled":          ["OOMKilled", "exceeded memory limit", "killed process"],
+    "CrashLoopBackOff":   ["Back-off restarting", "CrashLoopBackOff", "restart limit"],
+    "StartupProbeFailed": ["Startup probe failed", "readiness probe failed",
+                           "connection refused", "health check failed"],
+    "HighLatency":        ["latency", "response time", "exceeds threshold", "timeout"],
+}
+
+# Severity levels the Watcher pays attention to. Others are ignored.
+WATCHED_SEVERITIES = ["ERROR", "WARNING"]
+
+# How often Watcher polls the log stream in seconds.
+POLL_INTERVAL_SECONDS = 1
+
+# Structure of every event Watcher puts on the queue.
+EVENT_SCHEMA = {
+    "failure_type": str,
+    "severity":     str,
+    "service":      str,
+    "message":      str,
+    "timestamp":    float,
+    "raw_log":      dict,
+}
+
+# Hard boundaries. Watcher must never do these things.
+CANNOT_DO = [
+    "execute_actions",
+    "modify_infra_state",
+    "make_decisions",
+    "call_external_apis",
+]
+```
+
+---
+
+### `skills/healer_skills.py`
+
+```python
+# skills/healer_skills.py
+
+AGENT_NAME = "healer"
+AGENT_VERSION = "1.0.0"
+
+# Decision table â€” single source of truth for all action mappings.
+# Each entry: failure_type -> (action_name, action_params)
+# Healer does not decide what to do. It looks up what to do.
+DECISION_TABLE = {
+    "OOMKilled": (
+        "scale_memory",
+        {"memory": "1Gi"}
+    ),
+    "CrashLoopBackOff": (
+        "reset_and_redeploy",
+        {"restart_count": 0, "status": "running"}
+    ),
+    "StartupProbeFailed": (
+        "fix_port",
+        {"port": 8080}
+    ),
+    "HighLatency": (
+        "scale_instances",
+        {"max_instances": 3}
+    ),
+}
+
+# Maximum time Healer is allowed to spend making a decision in seconds.
+DECISION_TIMEOUT_SECONDS = 5
+
+# Maximum time a single action execution is allowed to take in seconds.
+ACTION_TIMEOUT_SECONDS = 5
+
+# What to do if no decision table entry matches the failure type.
+DEFAULT_ACTION = ("log_unknown", {})
+
+# Structure of what Healer records after every action.
+OUTCOME_SCHEMA = {
+    "failure_type": str,
+    "action_taken": str,
+    "action_params": dict,
+    "success":       bool,
+    "duration_ms":   float,
+    "timestamp":     float,
+}
+
+# Hard boundaries. Healer must never do these things.
+CANNOT_DO = [
+    "read_log_stream",
+    "pattern_match",
+    "modify_event_bus_directly",
+    "call_external_apis",
+]
+```
+
+---
+
+## The Synthetic Data
+
+All synthetic data is generated programmatically by `data/seed.py`.
+No hardcoded JSON files. No manual data entry. Run seed.py once and all
+three datasets are written to disk. Re-run with a different seed for
+different random orderings.
+
+### `data/seed.py` â€” What It Must Generate
+
+`seed.py` accepts one optional argument: `--seed INT` (default: 42).
+It writes three files to the `data/` folder and prints a summary when done.
+
+---
+
+#### Dataset 1 â€” Clean Failures
+**File:** `data/clean_failures.json`
+**Size:** 4 records â€” one per failure type
+**Purpose:** Prove baseline detection. Pure signal, zero noise.
+Used in Experiment 1.
+
+Each record is a single log event that unambiguously matches one pattern
+from `watcher_skills.DETECTABLE_PATTERNS`.
+
+```python
+CLEAN_FAILURES = [
+    {
+        "severity": "ERROR",
+        "service": "app-service",
+        "message": "OOMKilled: container exceeded memory limit 512Mi",
+        "labels": {"reason": "OOMKilled"}
+    },
+    {
+        "severity": "ERROR",
+        "service": "app-service",
+        "message": "Back-off restarting failed container",
+        "labels": {"reason": "CrashLoopBackOff"}
+    },
+    {
+        "severity": "ERROR",
+        "service": "app-service",
+        "message": "Startup probe failed: connection refused on port 9090",
+        "labels": {"reason": "StartupProbeFailed"}
+    },
+    {
+        "severity": "WARNING",
+        "service": "app-service",
+        "message": "Response time 7200ms exceeds threshold 5000ms",
+        "labels": {"reason": "HighLatency", "latency_ms": 7200}
+    },
+]
+```
+
+`seed.py` adds `timestamp` and `id` fields to each record before writing.
+
+---
+
+#### Dataset 2 â€” Healthy Baseline
+**File:** `data/healthy_baseline.json`
+**Size:** 50 records
+**Purpose:** Measure false positive rate. Watcher must produce zero events
+against this entire dataset.
+
+`seed.py` generates these by randomly sampling from a pool of healthy
+message templates and varying the numeric values:
+
+```python
+HEALTHY_TEMPLATES = [
+    "Request processed in {ms}ms",
+    "Health check passed on port {port}",
+    "Container started successfully",
+    "Scaling event completed. Instances: {n}",
+    "Connected to upstream service",
+    "Graceful shutdown initiated",
+    "Configuration reloaded successfully",
+    "Liveness probe passed",
+    "Cache warmed. Entries: {n}",
+    "Scheduled task completed in {ms}ms",
+    "Memory usage nominal: {pct}% of limit",
+    "CPU utilisation: {pct}%",
+    "Disk usage: {pct}% of allocated",
+    "Outbound connection established",
+    "Request queue depth: {n}",
+    "Response time {ms}ms within threshold",
+    "Replica count stable at {n}",
+    "Log rotation completed",
+    "Dependency check passed",
+    "Startup sequence complete",
+]
+```
+
+All 50 records use severity INFO. No record contains any string from
+`watcher_skills.DETECTABLE_PATTERNS`. This must be enforced in `seed.py`
+with an assertion after generation.
+
+---
+
+#### Dataset 3 â€” Mixed Stream
+**File:** `data/mixed_stream.json`
+**Size:** 100 records
+**Purpose:** Test full loop under realistic conditions. Signal hidden in noise.
+Used in Experiment 2.
+
+`seed.py` builds this dataset as follows:
+
+1. Take 90 healthy log records sampled from the same templates as Dataset 2
+2. Generate 10 failure records â€” at least 2 of each failure type,
+   distributed across all 4 types
+3. Insert the 10 failure records at random positions in the 90 healthy records
+4. Write the combined 100 records in the randomised order to
+   `data/mixed_stream.json`
+5. Write a separate `data/mixed_stream_ground_truth.json` that records the
+   exact index position of each injected failure and its expected action â€”
+   used by the harness to verify detection without ambiguity
+
+**Ground truth file structure:**
+
+```json
+[
+  {
+    "index": 7,
+    "failure_type": "OOMKilled",
+    "expected_action": "scale_memory",
+    "expected_params": { "memory": "1Gi" }
+  },
+  {
+    "index": 23,
+    "failure_type": "HighLatency",
+    "expected_action": "scale_instances",
+    "expected_params": { "max_instances": 3 }
+  }
+]
+```
+
+---
+
+#### `seed.py` Summary Output
+
+When run, `seed.py` prints:
+
+```
+GHOST POC â€” Synthetic Data Generation
+â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+Random seed:         42
+â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+clean_failures.json       4 records   4 failure events
+healthy_baseline.json    50 records   0 failure events
+mixed_stream.json       100 records  10 failure events
+mixed_stream_ground_truth.json  10 entries
+â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+Healthy baseline assertion: PASSED â€” zero failure patterns in healthy set
+All files written to data/
+```
+
+If the healthy baseline assertion fails â€” meaning a healthy log accidentally
+contains a pattern string â€” `seed.py` must raise an error and exit.
+The data is invalid if this check fails.
+
+---
+
+## The Harness
+
+`harness.py` sits at the project root. Controlled experiment runner.
+Feeds known inputs, runs the full agent loop, asserts correct outputs,
+writes results to SQLite. Plain Python. No test framework.
+
+### What the Harness Does
+
+**Experiment 1 â€” Detection only (Watcher, no Healer)**
+- Runs Watcher against `data/clean_failures.json`
+- Asserts all 4 failure types detected
+- Records detection latency per event
+
+**Experiment 2 â€” Full loop (Watcher + Healer)**
+- Resets `infra_state` to baseline before each scenario
+- Runs full loop against `data/clean_failures.json`
+- Asserts correct `infra_state` mutation per scenario
+- Records detect + decide + act + total MTTR
+
+**Experiment 3 â€” Mixed stream (full loop against noise)**
+- Runs full loop against `data/mixed_stream.json`
+- Compares detections against `data/mixed_stream_ground_truth.json`
+- Reports detection rate, false positive rate, resolution rate, MTTR
+
+### Harness Assertions
+
+```python
+ASSERTIONS = {
+    "OOMKilled":          lambda s: s["app-service"]["memory"] == "1Gi",
+    "CrashLoopBackOff":   lambda s: s["app-service"]["restart_count"] == 0,
+    "StartupProbeFailed": lambda s: s["app-service"]["port"] == 8080,
+    "HighLatency":        lambda s: s["app-service"]["max_instances"] == 3,
+}
+```
+
+### Expected Harness Output
+
+```
+GHOST POC â€” Harness Results
+â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+
+EXPERIMENT 1 â€” Detection Only
+Scenario              Result   Detect(ms)
+â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+OOMKilled             PASS        124
+CrashLoopBackOff      PASS        118
+StartupProbeFailed    PASS        131
+HighLatency           PASS        209
+
+EXPERIMENT 2 â€” Full Autonomous Loop (Clean Failures)
+Scenario              Result   Detect(ms)  Decide(ms)  Act(ms)  MTTR(ms)
+â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+OOMKilled             PASS        124           8          34      166
+CrashLoopBackOff      PASS        118          11          28      157
+StartupProbeFailed    PASS        131           9          31      171
+HighLatency           PASS        209          12          29      250
+
+EXPERIMENT 3 â€” Full Loop (Mixed Stream, 100 records, 10 injected failures)
+Detected:       10/10   (100%)
+False positives: 0/90   (0%)
+Resolved:       10/10   (100%)
+Avg MTTR:       186ms
+â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+Human baseline MTTR: ~8 min     Agent MTTR: <300ms
+â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+Full results written to metrics/results.db
+```
+
+---
+
+## Folder Structure
+
+```
+ghost-poc/
+â”œâ”€â”€ README.md                 # Human-facing repo front page
+â”œâ”€â”€ LICENSE                   # Apache 2.0
+â”œâ”€â”€ .gitignore                # Python standard gitignore
+â”œâ”€â”€ requirements.txt          # Empty Phase 1. Comments explain Phase 2.
+â”œâ”€â”€ harness.py                # START HERE. Runs all experiments. Asserts outcomes.
+â”‚
+â”œâ”€â”€ skills/
+â”‚   â”œâ”€â”€ watcher_skills.py     # Watcher patterns, severities, schema, boundaries
+â”‚   â””â”€â”€ healer_skills.py      # Decision table, timeouts, outcome schema, boundaries
+â”‚
+â”œâ”€â”€ data/
+â”‚   â”œâ”€â”€ seed.py               # Generates all three datasets. Run once before harness.
+â”‚   â”œâ”€â”€ scenarios.json        # Four failure scenarios â€” ground truth for harness
+â”‚   â”œâ”€â”€ generator.py          # Streams log events to Watcher during experiments
+â”‚   â”œâ”€â”€ clean_failures.json   # Generated by seed.py â€” 4 pure failure records
+â”‚   â”œâ”€â”€ healthy_baseline.json # Generated by seed.py â€” 50 healthy records
+â”‚   â”œâ”€â”€ mixed_stream.json     # Generated by seed.py â€” 100 mixed records
+â”‚   â””â”€â”€ mixed_stream_ground_truth.json  # Generated by seed.py â€” injection index
+â”‚
+â”œâ”€â”€ simulator/
+â”‚   â””â”€â”€ infra_state.py        # app-service state dict + four action functions
+â”‚
+â”œâ”€â”€ agents/
+â”‚   â”œâ”€â”€ watcher.py            # Imports watcher_skills. Log reader + pattern matcher.
+â”‚   â””â”€â”€ healer.py             # Imports healer_skills. Event handler + action executor.
+â”‚
+â”œâ”€â”€ blackboard/
+â”‚   â””â”€â”€ event_bus.py          # asyncio.Queue wrapper with typed events
+â”‚
+â”œâ”€â”€ metrics/
+â”‚   â”œâ”€â”€ recorder.py           # SQLite writer â€” events, decisions, actions, timestamps
+â”‚   â””â”€â”€ reporter.py           # Prints results table from metrics/results.db
+â”‚
+â””â”€â”€ experiments/
+    â”œâ”€â”€ run_baseline.py       # Times human manual resolution for MTTR baseline
+    â”œâ”€â”€ run_experiment1.py    # Watcher only â€” detection rate and latency
+    â”œâ”€â”€ run_experiment2.py    # Full loop on clean failures
+    â””â”€â”€ run_experiment3.py    # Full loop on mixed stream
+```
+
+---
+
+## Technical Constraints
+
+- **Language:** Python 3.11+
+- **External dependencies:** Zero for Phase 1
+- **No frameworks:** No LangChain, CrewAI, AutoGen, LangGraph
+- **No LLM:** Not in Phase 1
+- **No cloud:** Entirely local
+- **No workload-specific logic:** Must work for any container service
+- **Storage:** SQLite â€” built-in
+- **Concurrency:** asyncio only
+
+---
+
+## Definition of Done
+
+The POC is complete when all of the following are true:
+
+1. `data/seed.py` generates all three datasets and passes the healthy
+   baseline assertion
+2. `data/clean_failures.json` exists with 4 records
+3. `data/healthy_baseline.json` exists with 50 records, zero failure patterns
+4. `data/mixed_stream.json` exists with 100 records, 10 injected failures
+5. `data/mixed_stream_ground_truth.json` exists with 10 entries
+6. `skills/watcher_skills.py` defines all detectable patterns
+7. `skills/healer_skills.py` defines all decision table entries
+8. `agents/watcher.py` imports patterns only from `watcher_skills.py`
+9. `agents/healer.py` imports decision table only from `healer_skills.py`
+10. `harness.py` runs all three experiments and prints results
+11. Experiment 1: all 4 scenarios detected
+12. Experiment 2: all 4 scenarios pass assertions
+13. Experiment 3: 10/10 detected, 0 false positives, 10/10 resolved
+14. Results written to `metrics/results.db`
+15. System runs with two commands: `python data/seed.py` then `python harness.py`
+
+**Nothing else is in scope.**
+
+---
+
+## What Comes After (Not Now)
+
+- Real log ingestion from any platform
+- Memory layer â€” BM25 lookup over past incidents
+- Reasoning layer for novel events
+- Agent observability and span tracing
+- Time-bound matrices and circuit breaker
+- Real infrastructure actions via platform APIs or MCP tools
+- Multi-service and multi-platform support
+
+---
+
+## GitHub Files
+
+These four files are created last, after all 15 Definition of Done items pass.
+
+### `README.md`
+Plain English. No marketing language. Must include:
+- What GHOST is in one paragraph
+- What problem it solves in one sentence
+- Two commands to run it: `python data/seed.py` then `python harness.py`
+- What the harness output means
+- A results table placeholder for actual numbers after first run
+- Link to GHOST_POC.md for full specification
+
+### `.gitignore`
+```
+__pycache__/
+*.pyc
+*.db
+.env
+venv/
+.venv/
+*.egg-info/
+dist/
+data/clean_failures.json
+data/healthy_baseline.json
+data/mixed_stream.json
+data/mixed_stream_ground_truth.json
+```
+
+Note: generated data files are gitignored. Users run `seed.py` locally.
+Only `seed.py` and `scenarios.json` are committed â€” not the generated output.
+
+### `requirements.txt`
+```
+# Phase 1 â€” no external dependencies
+# Phase 2 â€” uncomment when adding memory layer
+# rank-bm25>=0.3.1
+```
+
+### `LICENSE`
+Apache 2.0 â€” full text, standard boilerplate.
+
+---
+
+## Implementing from this specification (optional workflow)
+
+Use this section if you are regenerating or extending the project from the spec alone.
+
+### Set up the project folder
+
+```bash
+mkdir ghost-poc
+cd ghost-poc
+cp /path/to/GHOST_POC.md .
+```
+
+Open the folder in your editor and keep the specification document available while you work.
+
+### Suggested prompt for an automated coding assistant
+
+If you use a coding assistant, you can paste something like the following (adapt names/paths to match this document):
+
+```
+Read GHOST_POC.md fully before writing a single line of code.
+
+Build the project exactly as specified. Follow this build order
+strictly. Do not skip steps or combine files:
+
+  1.  data/scenarios.json
+  2.  skills/watcher_skills.py
+  3.  skills/healer_skills.py
+  4.  simulator/infra_state.py
+  5.  data/seed.py
+  6.  data/generator.py
+  7.  blackboard/event_bus.py
+  8.  agents/watcher.py
+  9.  agents/healer.py
+  10. metrics/recorder.py
+  11. harness.py
+  12. README.md
+  13. .gitignore
+  14. requirements.txt
+  15. LICENSE
+
+Hard rules â€” never break these:
+- agents/watcher.py must import DETECTABLE_PATTERNS from skills/watcher_skills.py
+- agents/healer.py must import DECISION_TABLE from skills/healer_skills.py
+- The service is called app-service throughout â€” no exceptions
+- seed.py must include the healthy baseline assertion that raises on failure
+- Do not add any dependency not in requirements.txt
+- Do not use any framework â€” no LangChain, CrewAI, AutoGen, LangGraph, pytest
+- Do not change the folder structure
+- Do not combine files
+- Ask me before any architectural decision not in GHOST_POC.md
+
+After each file:
+- Tell me what you built in one sentence
+- Show me the file
+- Wait for me to say "continue"
+```
+
+### Verify generated data and the harness
+
+After `seed.py` is implemented, run:
+
+```bash
+python data/seed.py
+```
+
+Confirm all dataset files are written and the healthy baseline assertion passes before continuing with later files.
+
+After `harness.py` exists, run:
+
+```bash
+python harness.py
+```
+
+All three experiments must pass before treating Phase 1 as complete.
+
+### Publish to GitHub (optional)
+
+```bash
+git init
+git add .
+git commit -m "Initial commit â€” GHOST POC Phase 1"
+gh repo create ghost-poc --public --source=. --push
+```
+
+If `gh` is not installed:
+
+```bash
+# Mac
+brew install gh
+
+# Linux
+sudo apt install gh
+
+# Authenticate
+gh auth login
+```
+
+---
+
+### Build Order â€” Why Each Step Is Where It Is
+
+| Step | File | Why here |
+|------|------|----------|
+| 1 | `scenarios.json` | Ground truth â€” everything references this |
+| 2 | `watcher_skills.py` | Must exist before watcher imports it |
+| 3 | `healer_skills.py` | Must exist before healer imports it |
+| 4 | `infra_state.py` | seed.py and harness both reference service names |
+| 5 | `seed.py` | Generates data â€” must run before generator or harness |
+| 6 | `generator.py` | Streams data â€” needs infra_state service names |
+| 7 | `event_bus.py` | Both agents depend on it â€” before agents |
+| 8 | `watcher.py` | Needs skills + event_bus |
+| 9 | `healer.py` | Needs skills + event_bus + infra_state |
+| 10 | `recorder.py` | Harness needs it to write results |
+| 11 | `harness.py` | Depends on everything â€” validate here |
+| 12-15 | GitHub files | Only after harness passes |
+
+---
+
+### Review discipline for generated code
+
+**Never merge or accept more than one new file at a time without reading it.**
+
+After each file verify:
+1. Service named `app-service` throughout â€” no exceptions
+2. Imports from correct skills file â€” never defined inline
+3. CANNOT_DO boundaries respected
+4. No new dependency added
+5. No framework appeared
+
+If generated output drifts from the spec:
+**"You violated this constraint. Fix only this file before continuing."**
+
+Do not accept a bulk fix-and-continue in a single step. Read each fix before proceeding.
+
+---
+
+## Public implementation
+
+This specification is implemented in the repository **GHOST-PoC**:
+
+https://github.com/beejak/GHOST-PoC
+
+**README.md** in that repository explains why the PoC was built, how the code maps to this document, and how to run it. After cloning, generate synthetic data before the harness:
+
+`python data/seed.py` then `python harness.py`

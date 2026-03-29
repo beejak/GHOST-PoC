@@ -1,0 +1,3 @@
+# Phase 1 — no external dependencies
+# Phase 2 — uncomment when adding memory layer
+# rank-bm25>=0.3.1
