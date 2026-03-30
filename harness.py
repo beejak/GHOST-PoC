@@ -13,7 +13,9 @@ if str(ROOT) not in sys.path:
 
 from experiments import run_baseline, run_experiment1, run_experiment2, run_experiment3
 from experiments.run_experiment4 import run as run_experiment4
+from metrics.feedback import log_harness_feedback
 from metrics.recorder import Recorder, reset_database
+from skills import healer_skills, k8s_signal_skills, watcher_skills
 
 ASSERTIONS: dict[str, Callable[[dict[str, Any]], bool]] = {
     "OOMKilled": lambda s: s["app-service"]["memory"] == "1Gi",
@@ -143,18 +145,51 @@ async def _main() -> None:
     print(sep)
     print("Full results written to metrics/results.db")
 
+    # Outcome bundle for offline learning / orchestration (see docs/VISION_LAYERED_LEARNING.md)
+    e1_ok = all(r["result"] == "PASS" for r in rows1)
+    e2_ok = all(r["result"] == "PASS" for r in rows2)
+    e3_ok = (
+        summary3["detected"] == summary3["total_failures"]
+        and summary3["false_positives"] == 0
+        and summary3["resolved"] == summary3["total_failures"]
+    )
+    e4_ok = all(r["result"] == "PASS" for r in rows4)
+    run_id = log_harness_feedback(
+        {
+            "layers_observed": [
+                "log_substring",
+                "log_mixed_stream",
+                "k8s_structured_signal",
+            ],
+            "experiment1_all_pass": e1_ok,
+            "experiment2_all_pass": e2_ok,
+            "experiment3_all_pass": e3_ok,
+            "experiment4_all_pass": e4_ok,
+            "harness_all_pass": e1_ok and e2_ok and e3_ok and e4_ok,
+            "exp3_detected": summary3["detected"],
+            "exp3_total_injected": summary3["total_failures"],
+            "exp3_false_positives": summary3["false_positives"],
+            "policy_versions": {
+                "watcher_skills": watcher_skills.AGENT_VERSION,
+                "healer_skills": healer_skills.AGENT_VERSION,
+                "k8s_signal_skills": k8s_signal_skills.AGENT_VERSION,
+            },
+        }
+    )
+    print(f"Feedback ledger run_id: {run_id}  (table: feedback_rows)")
+
     # Hard failures for Definition of Done
-    if any(r["result"] != "PASS" for r in rows1):
+    if not e1_ok:
         raise SystemExit("Experiment 1 failed")
-    if any(r["result"] != "PASS" for r in rows2):
+    if not e2_ok:
         raise SystemExit("Experiment 2 failed")
-    if summary3["detected"] != summary3["total_failures"]:
-        raise SystemExit("Experiment 3 detection incomplete")
-    if summary3["false_positives"] != 0:
-        raise SystemExit("Experiment 3 false positives")
-    if summary3["resolved"] != summary3["total_failures"]:
+    if not e3_ok:
+        if summary3["detected"] != summary3["total_failures"]:
+            raise SystemExit("Experiment 3 detection incomplete")
+        if summary3["false_positives"] != 0:
+            raise SystemExit("Experiment 3 false positives")
         raise SystemExit("Experiment 3 resolution incomplete")
-    if any(r["result"] != "PASS" for r in rows4):
+    if not e4_ok:
         raise SystemExit("Experiment 4 failed")
 
 

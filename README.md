@@ -29,6 +29,7 @@
 - [Validation & results](#validation--results)
 - [Data: synthetic vs real logs](#data-synthetic-vs-real-world-samples)
 - [Production & mission-critical systems](#production--mission-critical-systems)
+- [Research: layered failures & learning](#research-layered-failures--learning)
 - [Quick start](#quick-start)
 - [Help, FAQ & troubleshooting](#help-faq--troubleshooting)
 - [Project structure](#project-structure)
@@ -209,6 +210,17 @@ GHOST Phase 1 is a **laboratory instrument**, not a production controller. The *
 
 ---
 
+## Research: layered failures & learning
+
+Today’s PoC is intentionally small. The next step toward **human-like troubleshooting under incomplete information** is to reason across **layers** (logs, manifests, network, APIs, data) with **specialist agents** and a **coordinator**, not a single log grep.
+
+- **[`docs/VISION_LAYERED_LEARNING.md`](docs/VISION_LAYERED_LEARNING.md)** — layered failure model, partial observability, swarm-style roles (Hermes-like orchestration without claiming a product), **topology-aware** bias, and an honest taxonomy of **feedback loops** (outcome, human-in-the-loop, memory, offline eval, bandits).  
+- **`metrics/feedback.py`** — after each `harness.py` run, an append-only **`feedback_rows`** record is stored in `metrics/results.db` with pass/fail flags, layer tags, and **policy (`skills`) versions** so future jobs can correlate outcomes with policy state (the first concrete hook for **self-improvement pipelines**).
+
+Agents here **do not** perform online gradient descent; “learning” means **closing the loop** from verified outcomes into **policy updates** you promote through tests.
+
+---
+
 ## Quick start
 
 ```bash
@@ -278,6 +290,7 @@ GHOST-PoC/
 |----------|-----------------|
 | [**README.md**](README.md) (this file) | First-time orientation, architecture, validation summary, quick start. |
 | [**docs/HELP.md**](docs/HELP.md) | **World-class operational help:** troubleshooting matrix, full FAQ (*including real vs synthetic logs*), extension guide, support. |
+| [**docs/VISION_LAYERED_LEARNING.md**](docs/VISION_LAYERED_LEARNING.md) | **Research architecture:** logs / manifest / network / API / DB layers, partial info, multi-agent swarm pattern, feedback & learning roadmap. |
 | [**Ghost PoC.md.txt**](Ghost%20PoC.md.txt) | Formal specification, definition of done, build order, synthetic vs real appendix. |
 | [**data/external/README.md**](data/external/README.md) | Where optional local / redacted corpora go and what **not** to commit. |
 

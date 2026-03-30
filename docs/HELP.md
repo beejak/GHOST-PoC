@@ -82,6 +82,14 @@ The harness runs all four. For ad-hoc runs, use a short Python snippet or tempor
 
 ---
 
+## Layered failures, swarms & learning (longer arc)
+
+For a **systems-level** view (logs vs manifests vs network vs API vs DB, troubleshooting with **incomplete** data, coordinator + specialist “swarm”, and **feedback loops** for policy improvement), read **[VISION_LAYERED_LEARNING.md](VISION_LAYERED_LEARNING.md)**.
+
+After each successful or failed harness run, check **`metrics/results.db`** table **`feedback_rows`** for the JSON summary written by **`metrics/feedback.py`** (`run_id` is printed at the end of `harness.py`).
+
+---
+
 ## Extending toward production-shaped workflows
 
 1. **Multi-signal Watcher** — combine logs + Kubernetes API watches + metrics; normalize to one event schema.  
