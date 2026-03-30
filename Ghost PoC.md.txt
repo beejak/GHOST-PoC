@@ -732,12 +732,27 @@ Do not accept a bulk fix-and-continue in a single step. Read each fix before pro
 
 ---
 
+## Synthetic data vs real-world log corpora
+
+The reference implementation generates **synthetic** JSON for CI, reproducibility, and hygiene.
+
+**You may still use real or open-source log samples** in your own checkout if you:
+
+1. Respect the **dataset license** (attribution, non-commercial clauses, redistribution limits).
+2. **Never commit** secrets, customer data, or unredacted production logs to a public repository.
+3. **Normalize** raw lines into the project log record shape (`severity`, `service`, `message`, optional `labels`).
+4. Understand that Phase 1 agents are **rule-based**, not trained ML models: "training" means extending `DETECTABLE_PATTERNS` and validating with harnesses, not gradient descent on arbitrary dumps.
+
+Place optional local samples under `data/external/` (see `data/external/README.md` and `docs/HELP.md` in the repository).
+
+---
+
 ## Public implementation
 
 This specification is implemented in the repository **GHOST-PoC**:
 
 https://github.com/beejak/GHOST-PoC
 
-**README.md** in that repository explains why the PoC was built, how the code maps to this document, and how to run it. After cloning, generate synthetic data before the harness:
+**README.md** and **docs/HELP.md** in that repository explain why the PoC was built, how to run it, troubleshooting, and how real log datasets relate to synthetic defaults. After cloning, generate synthetic data before the harness:
 
 `python data/seed.py` then `python harness.py`

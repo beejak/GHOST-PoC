@@ -12,7 +12,7 @@
 [![Dependencies](https://img.shields.io/badge/dependencies-stdlib%20only-success)](requirements.txt)
 [![Phase](https://img.shields.io/badge/phase-1%20PoC-6f42c1)](Ghost%20PoC.md.txt)
 
-[**Repository**](https://github.com/beejak/GHOST-PoC) · [**Specification**](Ghost%20PoC.md.txt) · [**Quick start**](#quick-start)
+[**Repository**](https://github.com/beejak/GHOST-PoC) · [**Specification**](Ghost%20PoC.md.txt) · [**Help & FAQ**](docs/HELP.md) · [**Quick start**](#quick-start)
 
 </div>
 
@@ -27,10 +27,12 @@
 - [Detection design (reducing bias)](#detection-design-reducing-bias)
 - [Kubernetes-style structured signals](#kubernetes-style-structured-signals-experiment-4)
 - [Validation & results](#validation--results)
+- [Data: synthetic vs real logs](#data-synthetic-vs-real-world-samples)
 - [Production & mission-critical systems](#production--mission-critical-systems)
 - [Quick start](#quick-start)
+- [Help, FAQ & troubleshooting](#help-faq--troubleshooting)
 - [Project structure](#project-structure)
-- [Documentation](#documentation)
+- [Documentation index](#documentation-index)
 - [License](#license)
 
 ---
@@ -161,6 +163,23 @@ All runs append structured rows to **`metrics/results.db`** for downstream repor
 
 ---
 
+## Data: synthetic vs real-world samples
+
+**Nothing stops you from using real or open-source log data** — the project ships synthetic JSON by default for four practical reasons:
+
+| Reason | Detail |
+|--------|--------|
+| **Reproducibility** | CI and contributors need identical inputs; pinned synthetic output from `seed.py` guarantees that. |
+| **Safety** | Production logs routinely contain secrets, PII, and internal hostnames — they must not land in a public git history. |
+| **Licensing** | Public “open” log corpora still carry terms (attribution, research-only, no redistribution). Compliance is **your** obligation when you import them. |
+| **Schema & labels** | GHOST experiments expect structured records and (for scoring) known failure classes. Raw downloads need **ETL** and often **manual or semi-automatic labeling**. |
+
+**“Training” in this PoC** does **not** mean neural-network training. The agents are **explicit policies** (substring / ordered rules + decision tables). Improving them means **engineering**: extend `skills/watcher_skills.py` and `skills/k8s_signal_skills.py`, validate with `harness.py`. A future ML layer would be a **separate** pipeline with its own data governance.
+
+**Where to put optional real or redacted samples locally:** [`data/external/README.md`](data/external/README.md) — files there stay **out of git** by default (except that README). See the full operational guide in **[`docs/HELP.md`](docs/HELP.md)** (FAQ: *Can we download real scenarios from open-source log providers?*).
+
+---
+
 ## Production & mission-critical systems
 
 GHOST Phase 1 is a **laboratory instrument**, not a production controller. The **ideas** it embodies, however, map directly to how serious teams introduce automation safely.
@@ -207,18 +226,41 @@ Optional: `python data/seed.py --seed 123` — different shuffle of failures ins
 
 ---
 
+## Help, FAQ & troubleshooting
+
+| Question | Short answer |
+|----------|----------------|
+| **Why no real logs in the repo?** | Reproducibility, CI, licensing, and secret/PII risk — see [Data: synthetic vs real](#data-synthetic-vs-real-world-samples) above. |
+| **Can we download open-source log datasets to “train” the agents?** | **Yes, locally**, if the license fits your use case. Today’s agents are **rule-based**; you refine **skills** and re-run the harness, not a model trainer. Normalize into the same JSON shape as generated `clean_failures.json`. |
+| **Harness failed on experiment N** | Re-run `python data/seed.py`. If it persists, open `docs/HELP.md` → *Quick troubleshooting* and match the error pattern. |
+| **Where is detailed help?** | **[`docs/HELP.md`](docs/HELP.md)** — troubleshooting table, extended FAQ, extension patterns, support pointers. |
+| **How do I change detection or healing?** | Only via `skills/` and `simulator/infra_state.py`; never duplicate tables inside `agents/`. |
+
+**Common fixes**
+
+1. `FileNotFoundError` on `data/*.json` → run `python data/seed.py` from the **repository root**.  
+2. Healthy baseline assertion failed → template overlap with patterns; adjust `data/seed.py` or `skills/watcher_skills.py`.  
+3. All timings `0 ms` → expected on fast CPUs; assertions still prove correctness.
+
+For incident-style walkthroughs, licensing notes, and a path to optional `data/external/` workflows, read **[`docs/HELP.md`](docs/HELP.md)**.
+
+---
+
 ## Project structure
 
 ```
 GHOST-PoC/
+├── docs/
+│   └── HELP.md             # In-depth help, FAQ, real-log guidance, troubleshooting
 ├── skills/                 # Policy: log patterns, K8s signal rules, decision table
-├── agents/                 # Watcher & Healer (import skills only)
+├── agents/                 # Watcher, K8s watcher & Healer (import skills only)
 ├── blackboard/             # Event bus (asyncio queue + validation)
 ├── simulator/              # Fake infra state + action implementations
 ├── data/
 │   ├── seed.py             # Synthetic dataset generator
 │   ├── generator.py        # Async JSON stream for harness
-│   └── scenarios.json      # Scenario metadata
+│   ├── scenarios.json      # Scenario metadata
+│   └── external/           # Gitignored drops for redacted real samples (README only in git)
 ├── experiments/            # Experiment 1–4 runners
 ├── metrics/                # SQLite recorder + optional reporter
 ├── harness.py              # Single entrypoint: all experiments
@@ -230,12 +272,14 @@ GHOST-PoC/
 
 ---
 
-## Documentation
+## Documentation index
 
-| Document | Contents |
-|----------|----------|
-| [**Ghost PoC.md.txt**](Ghost%20PoC.md.txt) | Full specification: problem statement, failure domain, agent contracts, data formats, harness assertions, definition of done, future phases. |
-| This **README** | Product-oriented overview, validation summary, and production framing. |
+| Document | When to read it |
+|----------|-----------------|
+| [**README.md**](README.md) (this file) | First-time orientation, architecture, validation summary, quick start. |
+| [**docs/HELP.md**](docs/HELP.md) | **World-class operational help:** troubleshooting matrix, full FAQ (*including real vs synthetic logs*), extension guide, support. |
+| [**Ghost PoC.md.txt**](Ghost%20PoC.md.txt) | Formal specification, definition of done, build order, synthetic vs real appendix. |
+| [**data/external/README.md**](data/external/README.md) | Where optional local / redacted corpora go and what **not** to commit. |
 
 ---
 

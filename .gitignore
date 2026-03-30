@@ -11,3 +11,6 @@ data/healthy_baseline.json
 data/mixed_stream.json
 data/mixed_stream_ground_truth.json
 data/k8s_clean_signals.json
+# Optional local real or redacted samples (keep only README.md in git)
+data/external/*
+!data/external/README.md
