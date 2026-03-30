@@ -149,7 +149,36 @@ flowchart LR
 
 ---
 
-## 8. Further reading in this repository
+## 8. AI “virtual dev teams” (e.g. GStack-style) vs GHOST
+
+Products marketed as **virtual software development teams** usually focus on **authoring change**: planning features, editing code, opening PRs, running tests in a dev environment. That is **development-time** work with a human reviewer in the loop.
+
+GHOST, as built in this repo, targets **runtime / operations-time** work: **detect** failure signals from logs or structured platform events, **apply** a **pre-reviewed** policy (`skills/`), **verify** outcome, **record feedback**. It is deliberately **not** an open-ended coding agent in production.
+
+**They complement each other** when you keep a hard boundary:
+
+| Concern | Virtual dev team | GHOST-style runtime loop |
+|---------|------------------|---------------------------|
+| **Primary job** | Implement features, refactors, tests | Stabilize known failure classes fast |
+| **Changes prod?** | Only via your normal CI/CD (merge, deploy) | Only via **allowlisted** automated actions you already approved in policy |
+| **Learning** | From code review, CI, human edits | From `feedback_rows`, harness replays, optional human labels on incidents |
+
+**Reasonable integration patterns**
+
+1. **Policy authoring** — After an incident, the virtual dev team proposes a **diff to `skills/*.py`** (new patterns or decision-table rows) from a ticket; humans merge after `harness.py` passes. GHOST stays deterministic; the AI team is a **faster typist + researcher**, not the executor in prod.  
+2. **Ticket bridge** — GHOST (or your orchestrator) opens/updates an issue with **signal bundle + suggested skill change**; the dev team implements and ships policy in the next release.  
+3. **Separate runtime** — Do **not** let an unconstrained coding swarm **directly** call `gk`, `kubectl`, or cloud APIs during an incident unless that tool is wrapped with the same **guardrails** as the Healer (timeouts, allowlists, audit).
+
+**What to avoid**
+
+- Collapsing “fix the outage” and “rewrite the service” into one agent with live prod access.  
+- Treating LLM-generated remediation as **authority** without verification and rollback.
+
+In short: **yes, you can incorporate a virtual dev team into your *overall* system** — mainly on the **left side of the pipeline** (code and policy change) and in **post-incident hardening**, while GHOST (or its production successor) owns the **tight runtime loop** under explicit policy.
+
+---
+
+## 9. Further reading in this repository
 
 - [README.md](../README.md) — what is implemented today.  
 - [HELP.md](HELP.md) — operations, real vs synthetic data.  
