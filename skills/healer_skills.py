@@ -1,7 +1,7 @@
 # skills/healer_skills.py
 
 AGENT_NAME = "healer"
-AGENT_VERSION = "1.0.0"
+AGENT_VERSION = "1.1.0"
 
 # Decision table — single source of truth for all action mappings.
 # Each entry: failure_type -> (action_name, action_params)
@@ -22,6 +22,27 @@ DECISION_TABLE = {
     "HighLatency": (
         "scale_instances",
         {"max_instances": 3}
+    ),
+    # Synthetic K8s-style signal classes (structured signals, not live API calls)
+    "ImagePullBackOff": (
+        "rollback_image",
+        {}
+    ),
+    "ReplicaMismatch": (
+        "sync_replicas",
+        {}
+    ),
+    "SchedulingBlocked": (
+        "relax_scheduling",
+        {}
+    ),
+    "NodeNotReady": (
+        "recover_node",
+        {}
+    ),
+    "PodDown": (
+        "restore_workload",
+        {}
     ),
 }
 

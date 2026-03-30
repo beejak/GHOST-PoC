@@ -1,4 +1,4 @@
-"""Log reader and pattern matcher — imports patterns only from watcher_skills."""
+"""Structured K8s-style signal reader — imports rules only from k8s_signal_skills."""
 
 from __future__ import annotations
 
@@ -6,25 +6,24 @@ import time
 from typing import Any
 
 from blackboard.event_bus import EventBus
-from skills.watcher_skills import message_matches_failure_type, severity_is_watched
+from skills.k8s_signal_skills import classify_signal
+from skills.watcher_skills import severity_is_watched
 
 
-async def analyze_and_publish(
+async def analyze_k8s_signal_and_publish(
     record: dict[str, Any],
     bus: EventBus,
     stream_index: int | None = None,
 ) -> float | None:
     """
-    If record matches a failure pattern, publish an event and return
-    detection duration in seconds; otherwise return None.
+    If record.signal matches a rule, emit the same event shape as the log Watcher.
     """
     if not severity_is_watched(record.get("severity")):
         return None
 
-    msg = record.get("message", "")
+    signal = record.get("signal")
     t0 = time.perf_counter()
-
-    failure_type = message_matches_failure_type(msg)
+    failure_type = classify_signal(signal) if isinstance(signal, dict) else None
     if failure_type is None:
         return None
 
@@ -35,7 +34,7 @@ async def analyze_and_publish(
         "failure_type": failure_type,
         "severity": record["severity"],
         "service": record.get("service", "app-service"),
-        "message": msg,
+        "message": record.get("message", ""),
         "timestamp": time.time(),
         "raw_log": raw,
     }

@@ -24,6 +24,8 @@
 - [Why GHOST exists](#why-ghost-exists)
 - [What we built](#what-we-built)
 - [How it works](#how-it-works)
+- [Detection design (reducing bias)](#detection-design-reducing-bias)
+- [Kubernetes-style structured signals](#kubernetes-style-structured-signals-experiment-4)
 - [Validation & results](#validation--results)
 - [Production & mission-critical systems](#production--mission-critical-systems)
 - [Quick start](#quick-start)
@@ -72,12 +74,14 @@ Concretely, this repository delivers:
 | **Detection policy** | `skills/watcher_skills.py` — substring sets per failure type, watched severities, event schema, explicit `CANNOT_DO` boundaries. |
 | **Remediation policy** | `skills/healer_skills.py` — decision table `(failure_type → action, params)`, timeouts, default unknown handler, outcome schema. |
 | **Watcher agent** | `agents/watcher.py` — imports patterns **only** from watcher skills; emits validated events on `ERROR` / `WARNING` lines. |
+| **K8s signal policy** | `skills/k8s_signal_skills.py` — ordered declarative rules on a `signal` object (`record_type`, `phase`, `reason`, etc.). |
+| **K8s signal agent** | `agents/k8s_watcher.py` — imports **only** `k8s_signal_skills`; same event envelope as the log Watcher so the Healer stays unified. |
 | **Healer agent** | `agents/healer.py` — imports the decision table **only** from healer skills; executes registered actions against shared state. |
 | **Event fabric** | `blackboard/event_bus.py` — `asyncio.Queue` with schema validation (typed handoff between agents). |
-| **Simulated platform** | `simulator/infra_state.py` — `app-service` baseline dict; actions: scale memory, reset/redeploy, fix port, scale instances, log-unknown. |
-| **Synthetic data** | `data/seed.py` — generates clean failures, healthy baseline (with **assertion** that no healthy message contains any detection substring), 100-line mixed stream + **ground-truth indices**; outputs are **gitignored**. |
+| **Simulated platform** | `simulator/infra_state.py` — `app-service` baseline dict; container actions plus **K8s-shaped** fields (`image`, `replicas_*`, `scheduling_blocked`, `node_ready`) and matching heal actions. |
+| **Synthetic data** | `data/seed.py` — log datasets as before, plus **`k8s_clean_signals.json`** (Pod / Node / Deployment style records); outputs are **gitignored**. |
 | **Streaming** | `data/generator.py` — async replay of JSON records for experiments. |
-| **Experiments** | `experiments/run_experiment1.py` … `run_experiment3.py` — detection-only, full loop on clean failures, full loop on noisy stream. |
+| **Experiments** | `experiments/run_experiment1.py` … `run_experiment4.py` — logs + **Experiment 4** full loop on synthetic K8s-style signals. |
 | **Harness & metrics** | `harness.py` + `metrics/recorder.py` — orchestrates all scenarios, prints a summary, persists rows to `metrics/results.db`. |
 
 **Design rule:** agents never duplicate patterns or decision tables inline — **skills are the single source of truth** for review, diff, and compliance-style audits.
@@ -88,7 +92,7 @@ Concretely, this repository delivers:
 
 1. **Watcher** scans each log record (optionally tagged with a **stream index**). If severity is in scope, it walks `DETECTABLE_PATTERNS` in order and publishes **one** event on the first substring hit in `message`.
 2. **Healer** awaits an event, resolves `(action, params)` via `DECISION_TABLE` (or `DEFAULT_ACTION`), runs the matching function in `ACTION_REGISTRY` on `infra_state`, and records **decide / act** timing (wrapped with `asyncio.wait_for` per skill timeouts).
-3. **Harness** drives three experiments: pure detection, end-to-end healing with **per-scenario infra reset**, and **signal-in-noise** validation against `mixed_stream_ground_truth.json`.
+3. **Harness** drives four experiments: log detection, log full loop, mixed stream, and **structured K8s-style signals** (`k8s_clean_signals.json`) with **per-scenario** `apply_k8s_failure_preset` + heal + assert.
 
 ```mermaid
 flowchart TB
@@ -113,6 +117,29 @@ flowchart TB
   H --> DB
 ```
 
+### Detection design (broader coverage, less bias)
+
+- **Case-insensitive matching** — Log lines are matched with **Unicode casefold**, and severities accept any casing (e.g. `error` / `ERROR`). That avoids favoring one vendor’s capitalization (Kubernetes vs Docker vs PaaS logs).
+- **Vendor-neutral phrases** — `DETECTABLE_PATTERNS` includes multiple paraphrases per class (OOM / cgroup wording, crash-loop and backoff wording, probe and health-check failures, latency and timeout phrasing) so the PoC is not tuned to a single message shape.
+- **Diverse synthetic failures** — `data/seed.py` picks among several templates per failure type for clean and mixed datasets, so experiments are not overfit to four fixed strings.
+- **Shared healthy check** — The seed script uses the same `any_pattern_matches_message()` helper as policy in `watcher_skills.py`, so “no false patterns in healthy logs” is evaluated with the **same** rules as the Watcher (healthy lines were adjusted so phrases like “response time … within threshold” do not collide with latency rules once matching is case-insensitive).
+
+First matching **failure type** in `DETECTABLE_PATTERNS` iteration order wins; patterns are ordered so higher-signal phrases are considered in a stable priority.
+
+### Kubernetes-style structured signals (Experiment 4)
+
+This is **not** a live cluster client: it is the **same Watcher → Healer loop** fed by JSON that resembles what you would derive from **kube-apiserver** watches (Pod/Node/Deployment-shaped objects).
+
+| Synthetic class | Typical real-world analogue | Simulated heal |
+|-----------------|----------------------------|----------------|
+| `ImagePullBackOff` / `ErrImagePull` | Bad image tag, registry auth | Roll back to `image_previous` |
+| `SchedulingBlocked` | `FailedScheduling` (resources, taints) | Clear `scheduling_blocked` |
+| `NodeNotReady` | Node condition NotReady | Set `node_ready` |
+| `ReplicaMismatch` | Deployment ready ≠ desired | `sync_replicas` |
+| `PodDown` (Evicted) | Pod `Failed` + evicted / node pressure | `restore_workload` |
+
+**Why this matters:** log substring matching alone is **biased** toward whatever format your app prints. Production agents usually combine **typed API objects + events + metrics**. Experiment 4 is a **stdlib-only** stepping stone: swap `signal` ingestion for an informer later without changing the Healer contract.
+
 ---
 
 ## Validation & results
@@ -126,6 +153,7 @@ Locally, the same commands execute:
 | **1 — Detection** | Watcher finds all four failure types on clean logs | 4 / 4 scenarios **PASS** |
 | **2 — Full loop** | Healer applies correct mutations after each clean failure (infra reset per scenario) | 4 / 4 assertions **PASS** (memory, port, instances, restart semantics) |
 | **3 — Mixed stream** | 100 lines: 90 healthy + 10 injected failures | **10 / 10** detected, **0** false positives on healthy lines, **10 / 10** resolved vs ground truth |
+| **4 — K8s signals** | 6 structured `signal` records (2× image pull paths + scheduling + node + replicas + evicted pod) | **6 / 6** **PASS** |
 
 **Timing:** On fast local hardware, reported detect/decide/act milliseconds may round to **0 ms**; **correctness** is enforced by assertions, not wall-clock drama. Add delays in the generator or real I/O when you need representative latency distributions.
 
@@ -183,7 +211,7 @@ Optional: `python data/seed.py --seed 123` — different shuffle of failures ins
 
 ```
 GHOST-PoC/
-├── skills/                 # Policy: patterns + decision table (review here first)
+├── skills/                 # Policy: log patterns, K8s signal rules, decision table
 ├── agents/                 # Watcher & Healer (import skills only)
 ├── blackboard/             # Event bus (asyncio queue + validation)
 ├── simulator/              # Fake infra state + action implementations
@@ -191,7 +219,7 @@ GHOST-PoC/
 │   ├── seed.py             # Synthetic dataset generator
 │   ├── generator.py        # Async JSON stream for harness
 │   └── scenarios.json      # Scenario metadata
-├── experiments/            # Experiment 1–3 runners
+├── experiments/            # Experiment 1–4 runners
 ├── metrics/                # SQLite recorder + optional reporter
 ├── harness.py              # Single entrypoint: all experiments
 ├── Ghost PoC.md.txt        # Full build specification

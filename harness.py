@@ -12,6 +12,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from experiments import run_baseline, run_experiment1, run_experiment2, run_experiment3
+from experiments.run_experiment4 import run as run_experiment4
 from metrics.recorder import Recorder, reset_database
 
 ASSERTIONS: dict[str, Callable[[dict[str, Any]], bool]] = {
@@ -19,6 +20,18 @@ ASSERTIONS: dict[str, Callable[[dict[str, Any]], bool]] = {
     "CrashLoopBackOff": lambda s: s["app-service"]["restart_count"] == 0,
     "StartupProbeFailed": lambda s: s["app-service"]["port"] == 8080,
     "HighLatency": lambda s: s["app-service"]["max_instances"] == 3,
+}
+
+K8S_ASSERTIONS: dict[str, Callable[[dict[str, Any]], bool]] = {
+    "ImagePullBackOff": lambda s: s["app-service"]["image"]
+    == "registry/app:v1-stable",
+    "ReplicaMismatch": lambda s: s["app-service"]["replicas_ready"]
+    == s["app-service"]["replicas_desired"]
+    == 3,
+    "SchedulingBlocked": lambda s: s["app-service"]["scheduling_blocked"] is False,
+    "NodeNotReady": lambda s: s["app-service"]["node_ready"] is True,
+    "PodDown": lambda s: s["app-service"]["status"] == "running"
+    and s["app-service"]["replicas_ready"] == s["app-service"]["replicas_desired"],
 }
 
 
@@ -51,6 +64,13 @@ async def _main() -> None:
         summary3 = await run_experiment3.run(r3)
     finally:
         r3.close()
+
+    # --- Experiment 4: synthetic K8s-style structured signals ---
+    r4 = Recorder("experiment4")
+    try:
+        rows4 = await run_experiment4(K8S_ASSERTIONS, r4)
+    finally:
+        r4.close()
 
     # --- Console report (spec-style; ASCII for Windows consoles) ---
     print("GHOST POC - Harness Results")
@@ -102,6 +122,23 @@ async def _main() -> None:
     print(f"Resolved:       {resolv}/{t}   ({100 * resolv / t:.0f}%)" if t else "")
     print(f"Avg MTTR:       {avg:.0f}ms")
     print(sep)
+    print("EXPERIMENT 4 - K8s-style signals (synthetic Pod/Node/Deployment)")
+    print(
+        "Scenario              Result   Detect(ms)  Decide(ms)  Act(ms)  MTTR(ms)"
+    )
+    print(sep)
+    for row in rows4:
+        ft = row["failure_type"]
+        res = row["result"]
+        if "detect_ms" in row:
+            print(
+                f"{ft:22}{res:8}{row['detect_ms']:>10.0f}"
+                f"{row['decide_ms']:>12.0f}{row['act_ms']:>9.0f}"
+                f"{row['mttr_ms']:>10.0f}"
+            )
+        else:
+            print(f"{ft:22}{res:8}")
+    print(sep)
     print(run_baseline.describe_baseline())
     print(sep)
     print("Full results written to metrics/results.db")
@@ -117,6 +154,8 @@ async def _main() -> None:
         raise SystemExit("Experiment 3 false positives")
     if summary3["resolved"] != summary3["total_failures"]:
         raise SystemExit("Experiment 3 resolution incomplete")
+    if any(r["result"] != "PASS" for r in rows4):
+        raise SystemExit("Experiment 4 failed")
 
 
 if __name__ == "__main__":
