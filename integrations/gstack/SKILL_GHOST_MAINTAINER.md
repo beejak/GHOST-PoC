@@ -2,7 +2,7 @@
 description: Maintain GHOST PoC policy (skills) and keep harness green
 ---
 
-# GHOST maintainer (Claude Code / GStack skill)
+# GHOST maintainer (Claude Code / [gstack](https://github.com/garrytan/gstack)-compatible skill)
 
 ## Context
 

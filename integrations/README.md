@@ -10,7 +10,7 @@ This folder does **not** vendor third-party agent runtimes. It provides **contra
 | Path | What it is |
 |------|------------|
 | [`hermes/`](hermes/) | Tool/write boundaries + notes for [Nous Hermes Agent](https://hermes-agent.nousresearch.com/) (install from their GitHub, not PyPI). |
-| [`gstack/`](gstack/) | Markdown skill-style instructions for **Claude Code / GStack**-style workflows (editor layer; not `import gstack` in Python). |
+| [`gstack/`](gstack/) | Maintainer skill text compatible with **[gstack](https://github.com/garrytan/gstack)** (Claude Code skills; also Codex/Cursor paths in upstream docs). Not `import gstack` in Python. |
 | [`validate.py`](validate.py) | **Stdlib-only** checks that policy files exist and required repo paths are present. Run in CI. |
 
 ## Trade-offs (no marketing)
@@ -18,7 +18,7 @@ This folder does **not** vendor third-party agent runtimes. It provides **contra
 | Approach | Upside | Downside |
 |----------|--------|----------|
 | **Hermes Python API** (`pip install git+…`) | Rich agent loop, delegation | Extra deps, API keys, supply chain from git, harder CI reproduction |
-| **GStack / Claude Code skills** | Fast human+AI editing of `skills/` | Not importable from `harness.py`; governance is in your IDE/org |
+| **[gstack](https://github.com/garrytan/gstack) / Claude Code skills** | Structured slash workflows + fast human+AI editing of `skills/` | Not importable from `harness.py`; Bun/Node setup per upstream; governance in your IDE/org |
 | **This repo only (default)** | Reproducible, stdlib CI | No built-in LLM reasoning |
 
 ## Recommended use

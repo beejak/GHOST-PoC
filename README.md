@@ -214,7 +214,7 @@ GHOST Phase 1 is a **laboratory instrument**, not a production controller. The *
 
 Today’s PoC is intentionally small. The next step toward **human-like troubleshooting under incomplete information** is to reason across **layers** (logs, manifests, network, APIs, data) with **specialist agents** and a **coordinator**, not a single log grep.
 
-- **[`docs/VISION_LAYERED_LEARNING.md`](docs/VISION_LAYERED_LEARNING.md)** — layered failure model, partial observability, swarm-style roles (Hermes-like orchestration without claiming a product), **topology-aware** bias, an honest taxonomy of **feedback loops**, and how **AI virtual dev teams** (e.g. GStack-style) fit **next to** GHOST as policy/code authors—not unguarded prod operators.  
+- **[`docs/VISION_LAYERED_LEARNING.md`](docs/VISION_LAYERED_LEARNING.md)** — layered failure model, partial observability, swarm-style roles (Hermes-like orchestration without claiming a product), **topology-aware** bias, an honest taxonomy of **feedback loops**, and how **AI virtual dev teams** (e.g. [gstack](https://github.com/garrytan/gstack)) fit **next to** GHOST as policy/code authors—not unguarded prod operators.  
 - **`metrics/feedback.py`** — after each `harness.py` run, an append-only **`feedback_rows`** record is stored in `metrics/results.db` with pass/fail flags, layer tags, and **policy (`skills`) versions** so future jobs can correlate outcomes with policy state (the first concrete hook for **self-improvement pipelines**).
 
 Agents here **do not** perform online gradient descent; “learning” means **closing the loop** from verified outcomes into **policy updates** you promote through tests.
@@ -264,7 +264,7 @@ For incident-style walkthroughs, licensing notes, and a path to optional `data/e
 GHOST-PoC/
 ├── docs/
 │   └── HELP.md             # In-depth help, FAQ, real-log guidance, troubleshooting
-├── integrations/           # Hermes / GStack-style contracts + validate.py (no LLM in CI)
+├── integrations/           # Hermes + gstack-compatible contracts; validate.py (no LLM in CI)
 ├── skills/                 # Policy: log patterns, K8s signal rules, decision table
 ├── agents/                 # Watcher, K8s watcher & Healer (import skills only)
 ├── blackboard/             # Event bus (asyncio queue + validation)
@@ -294,7 +294,7 @@ GHOST-PoC/
 | [**docs/VISION_LAYERED_LEARNING.md**](docs/VISION_LAYERED_LEARNING.md) | **Research architecture:** layered failures, partial info, runtime swarm pattern, feedback roadmap, **virtual dev team vs GHOST** boundary. |
 | [**Ghost PoC.md.txt**](Ghost%20PoC.md.txt) | Formal specification, definition of done, build order, synthetic vs real appendix. |
 | [**data/external/README.md**](data/external/README.md) | Where optional local / redacted corpora go and what **not** to commit. |
-| [**integrations/README.md**](integrations/README.md) | **Hermes** (Nous) tool policy + **GStack-style** maintainer skill; `validate.py` runs inside `harness.py`. |
+| [**integrations/README.md**](integrations/README.md) | **Hermes** (Nous) tool policy + maintainer skill aligned with **[gstack](https://github.com/garrytan/gstack)**; `validate.py` runs inside `harness.py`. |
 
 ---
 
