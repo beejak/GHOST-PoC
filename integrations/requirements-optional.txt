@@ -1,0 +1,4 @@
+# Optional — not used by CI or default harness.
+# Nous Hermes Agent installs from GitHub per upstream docs, not a stable PyPI name:
+#   pip install git+https://github.com/NousResearch/hermes-agent.git
+# You must configure model provider API keys outside this file.

@@ -264,6 +264,7 @@ For incident-style walkthroughs, licensing notes, and a path to optional `data/e
 GHOST-PoC/
 ├── docs/
 │   └── HELP.md             # In-depth help, FAQ, real-log guidance, troubleshooting
+├── integrations/           # Hermes / GStack-style contracts + validate.py (no LLM in CI)
 ├── skills/                 # Policy: log patterns, K8s signal rules, decision table
 ├── agents/                 # Watcher, K8s watcher & Healer (import skills only)
 ├── blackboard/             # Event bus (asyncio queue + validation)
@@ -293,6 +294,7 @@ GHOST-PoC/
 | [**docs/VISION_LAYERED_LEARNING.md**](docs/VISION_LAYERED_LEARNING.md) | **Research architecture:** layered failures, partial info, runtime swarm pattern, feedback roadmap, **virtual dev team vs GHOST** boundary. |
 | [**Ghost PoC.md.txt**](Ghost%20PoC.md.txt) | Formal specification, definition of done, build order, synthetic vs real appendix. |
 | [**data/external/README.md**](data/external/README.md) | Where optional local / redacted corpora go and what **not** to commit. |
+| [**integrations/README.md**](integrations/README.md) | **Hermes** (Nous) tool policy + **GStack-style** maintainer skill; `validate.py` runs inside `harness.py`. |
 
 ---
 

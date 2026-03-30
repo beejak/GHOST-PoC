@@ -99,6 +99,17 @@ After each successful or failed harness run, check **`metrics/results.db`** tabl
 
 ---
 
+## External agent tools (Hermes, GStack-style skills)
+
+This repo ships **contracts**, not bundled LLM runtimes:
+
+- **[`integrations/README.md`](../integrations/README.md)** — Hermes Agent policy JSON + GStack-compatible maintainer skill text.  
+- **`harness.py`** runs **`integrations/validate.py`** first so those files stay consistent.
+
+Hermes installs from **Nous Research’s GitHub** (see `integrations/hermes/README.md`). GStack / Claude Code skills live in your **IDE config**, not `pip install`.
+
+---
+
 ## Getting support
 
 - **Specification & design intent:** [Ghost PoC.md.txt](../Ghost%20PoC.md.txt)  

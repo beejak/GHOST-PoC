@@ -137,6 +137,7 @@ flowchart LR
 | Topology | Static `app-service` | External **topology.json** + loader; coordinator reads it |
 | Learning | `metrics/results.db` + **`metrics/feedback.py`** | Each harness run appends a JSON summary to **`feedback_rows`** (`run_id`, payload) for offline learning; add human labels / bandits in a later phase |
 | Real APIs | None | Optional `requirements.txt` phase: kubernetes client, read-only RBAC |
+| Hermes / GStack-style tools | [`integrations/`](../integrations/) contracts + `validate.py` in `harness.py` | Hermes: Nous Agent from GitHub + your API keys. GStack: Claude Code skills path — not a Python import. |
 
 ---
 

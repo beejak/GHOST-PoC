@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "name": "ghost-poc-hermes-tool-policy",
+  "description": "Suggested allow/deny boundaries when pointing Nous Hermes Agent (or similar tool-using LLM agents) at the GHOST PoC repository. Adapt to your org's Hermes tool config format.",
+  "upstream_reference": "https://hermes-agent.nousresearch.com/docs/",
+  "read_globs": [
+    "README.md",
+    "docs/**/*.md",
+    "Ghost PoC.md.txt",
+    "skills/**/*.py",
+    "agents/**/*.py",
+    "blackboard/**/*.py",
+    "simulator/**/*.py",
+    "data/seed.py",
+    "data/generator.py",
+    "data/scenarios.json",
+    "experiments/**/*.py",
+    "metrics/**/*.py",
+    "harness.py",
+    "integrations/**/*"
+  ],
+  "write_globs": [
+    "skills/**/*.py",
+    "agents/**/*.py",
+    "blackboard/**/*.py",
+    "simulator/**/*.py",
+    "data/seed.py",
+    "data/generator.py",
+    "experiments/**/*.py",
+    "metrics/**/*.py",
+    "harness.py",
+    "docs/**/*.md",
+    "integrations/**/*",
+    "README.md"
+  ],
+  "forbid_globs": [
+    "**/.env",
+    "**/.env.*",
+    "**/*secret*",
+    "**/*.pem",
+    "**/credentials*",
+    "metrics/results.db"
+  ],
+  "shell_allowlist": [
+    "python data/seed.py",
+    "python harness.py",
+    "python integrations/validate.py"
+  ],
+  "required_after_skills_change": [
+    "python data/seed.py",
+    "python harness.py"
+  ],
+  "ghost_invariants": [
+    "agents/watcher.py must not define DETECTABLE_PATTERNS inline; import from skills.watcher_skills",
+    "agents/healer.py must not define DECISION_TABLE inline; import from skills.healer_skills",
+    "agents/k8s_watcher.py must import rules only from skills.k8s_signal_skills",
+    "service name app-service in simulator and scenarios unless spec explicitly changes"
+  ]
+}

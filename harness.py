@@ -13,6 +13,7 @@ if str(ROOT) not in sys.path:
 
 from experiments import run_baseline, run_experiment1, run_experiment2, run_experiment3
 from experiments.run_experiment4 import run as run_experiment4
+from integrations.validate import main as integration_contract_check
 from metrics.feedback import log_harness_feedback
 from metrics.recorder import Recorder, reset_database
 from skills import healer_skills, k8s_signal_skills, watcher_skills
@@ -43,6 +44,9 @@ def _rule(width: int = 72) -> str:
 
 async def _main() -> None:
     reset_database()
+
+    if integration_contract_check() != 0:
+        raise SystemExit("Integration contract validation failed (integrations/validate.py)")
 
     sep = _rule(39)
 
