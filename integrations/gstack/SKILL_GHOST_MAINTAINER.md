@@ -16,7 +16,7 @@ Repository: **GHOST PoC** — autonomous loop: Watcher / K8s-signal watcher → 
 ## Rules
 
 1. **Never** inline `DETECTABLE_PATTERNS` or `DECISION_TABLE` in `agents/` — import from `skills/`.  
-2. New heal actions: implement in `simulator/infra_state.py`, register in `ACTION_REGISTRY`, add `DECISION_TABLE` row.  
+2. New heal actions: implement in `simulator/infra_state.py`, register in `ACTION_REGISTRY`, add `DECISION_TABLE` row, and add **`POST_HEAL_VERIFIERS`** for that `failure_type`.  
 3. If `data/seed.py` changes, ensure healthy baseline still passes `any_pattern_matches_message()`.  
 4. Service name stays **`app-service`** unless the whole spec is intentionally revised.
 

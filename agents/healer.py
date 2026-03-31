@@ -12,6 +12,7 @@ from skills.healer_skills import (
     DECISION_TABLE,
     DECISION_TIMEOUT_SECONDS,
     DEFAULT_ACTION,
+    POST_HEAL_VERIFIERS,
 )
 from simulator.infra_state import ACTION_REGISTRY
 
@@ -54,11 +55,27 @@ async def heal_once(
         success = False
     act_ms = (time.perf_counter() - t_act0) * 1000
 
+    verify_ok = False
+    if dry_run:
+        verify_ok = True
+    elif not success:
+        verify_ok = False
+    elif action_name == "log_unknown":
+        verify_ok = True
+    else:
+        check = POST_HEAL_VERIFIERS.get(failure_type)
+        if check is not None:
+            verify_ok = check(infra_state)
+            success = success and verify_ok
+        else:
+            verify_ok = True
+
     outcome = {
         "failure_type": failure_type,
         "action_taken": action_name,
         "action_params": dict(action_params),
         "success": success,
+        "verify_ok": verify_ok,
         "duration_ms": decide_ms + act_ms,
         "timestamp": time.time(),
         "decide_ms": decide_ms,

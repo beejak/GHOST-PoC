@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import sys
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 ROOT = Path(__file__).resolve().parent
 if str(ROOT) not in sys.path:
@@ -18,25 +18,7 @@ from integrations.validate import main as integration_contract_check
 from metrics.feedback import log_harness_feedback
 from metrics.recorder import Recorder, reset_database
 from skills import healer_skills, k8s_signal_skills, watcher_skills
-
-ASSERTIONS: dict[str, Callable[[dict[str, Any]], bool]] = {
-    "OOMKilled": lambda s: s["app-service"]["memory"] == "1Gi",
-    "CrashLoopBackOff": lambda s: s["app-service"]["restart_count"] == 0,
-    "StartupProbeFailed": lambda s: s["app-service"]["port"] == 8080,
-    "HighLatency": lambda s: s["app-service"]["max_instances"] == 3,
-}
-
-K8S_ASSERTIONS: dict[str, Callable[[dict[str, Any]], bool]] = {
-    "ImagePullBackOff": lambda s: s["app-service"]["image"]
-    == "registry/app:v1-stable",
-    "ReplicaMismatch": lambda s: s["app-service"]["replicas_ready"]
-    == s["app-service"]["replicas_desired"]
-    == 3,
-    "SchedulingBlocked": lambda s: s["app-service"]["scheduling_blocked"] is False,
-    "NodeNotReady": lambda s: s["app-service"]["node_ready"] is True,
-    "PodDown": lambda s: s["app-service"]["status"] == "running"
-    and s["app-service"]["replicas_ready"] == s["app-service"]["replicas_desired"],
-}
+from skills.healer_skills import POST_HEAL_VERIFIERS
 
 
 def _rule(width: int = 72) -> str:
@@ -61,7 +43,7 @@ async def _main() -> None:
     # --- Experiment 2 ---
     r2 = Recorder("experiment2")
     try:
-        rows2 = await run_experiment2.run(ASSERTIONS, r2)
+        rows2 = await run_experiment2.run(POST_HEAL_VERIFIERS, r2)
     finally:
         r2.close()
 
@@ -75,7 +57,7 @@ async def _main() -> None:
     # --- Experiment 4: synthetic K8s-style structured signals ---
     r4 = Recorder("experiment4")
     try:
-        rows4 = await run_experiment4(K8S_ASSERTIONS, r4)
+        rows4 = await run_experiment4(POST_HEAL_VERIFIERS, r4)
     finally:
         r4.close()
 

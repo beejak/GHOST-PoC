@@ -59,6 +59,7 @@
     "agents/watcher.py must not define DETECTABLE_PATTERNS inline; import from skills.watcher_skills",
     "agents/healer.py must not define DECISION_TABLE inline; import from skills.healer_skills",
     "agents/k8s_watcher.py must import rules only from skills.k8s_signal_skills",
-    "service name app-service in simulator and scenarios unless spec explicitly changes"
+    "service name app-service in simulator and scenarios unless spec explicitly changes",
+    "POST_HEAL_VERIFIERS in healer_skills must cover each mutating failure_type in DECISION_TABLE (same intent as harness assertions)"
   ]
 }

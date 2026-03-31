@@ -35,7 +35,8 @@ So anyone can **clone → seed → harness** without dependency drift, supply-ch
 1. **Logs:** edit `skills/watcher_skills.py` (`DETECTABLE_PATTERNS`) and/or `skills/healer_skills.py` (`DECISION_TABLE`).  
 2. **K8s-style JSON signals:** edit `skills/k8s_signal_skills.py` (`SIGNAL_RULES`).  
 3. **Actions:** add a function in `simulator/infra_state.py`, register it in `ACTION_REGISTRY`, then reference it from the decision table.  
-4. **Never** embed pattern strings or decision tables inside `agents/*.py` — that breaks the skills-as-policy rule.
+4. **Never** embed pattern strings or decision tables inside `agents/*.py` — that breaks the skills-as-policy rule.  
+5. **Post-heal verification** — for each mutating row in `DECISION_TABLE`, maintain a matching predicate in **`POST_HEAL_VERIFIERS`** in `healer_skills.py`. `heal_once` runs it after the action; if it fails, `success` is false. Add a verifier when you add a new failure class and action.
 
 ### Can we download real scenarios from open-source log providers and store them in this project?
 

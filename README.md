@@ -98,7 +98,7 @@ Concretely, this repository delivers:
 ## How it works
 
 1. **Watcher** scans each log record (optionally tagged with a **stream index**). If severity is in scope, it walks `DETECTABLE_PATTERNS` in order and publishes **one** event on the first substring hit in `message`.
-2. **Healer** awaits an event, resolves `(action, params)` via `DECISION_TABLE` (or `DEFAULT_ACTION`), runs the matching function in `ACTION_REGISTRY` on `infra_state`, and records **decide / act** timing (wrapped with `asyncio.wait_for` per skill timeouts). For **shadow / lab** use, `heal_once(..., dry_run=True)` resolves the action but **does not** mutate `infra_state`.
+2. **Healer** awaits an event, resolves `(action, params)` via `DECISION_TABLE` (or `DEFAULT_ACTION`), runs the matching function in `ACTION_REGISTRY` on `infra_state`, then runs **`POST_HEAL_VERIFIERS`** from `healer_skills.py` on the updated state (unless `dry_run` or `log_unknown`). If the predicate fails, **`success`** is false even when the action raised no exception. Timing uses `asyncio.wait_for` per skill timeouts. For **shadow / lab**, `heal_once(..., dry_run=True)` skips mutation and skips verification.
 3. **Harness** resets metrics DB, runs **`integrations/validate.py`** (required paths + Hermes policy shape), then drives **five** experiments: log detection, log full loop, mixed stream (100/10), **structured K8s-style signals** (`k8s_clean_signals.json`), and **near-real noisy stream** (200/20, `near_real_stream.json`). On failure it exits non-zero (CI uses the same path).
 
 ```mermaid
