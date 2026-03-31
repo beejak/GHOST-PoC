@@ -6,6 +6,8 @@
 
 **Autonomous detection and remediation for container-style failures — proven on a deterministic, audit-friendly loop.**
 
+> **Executive snapshot:** External replay recall improved from **`6/11`** to **`11/11`** on the same captured lab run, while holding **`0` false positives**.
+
 [![CI](https://github.com/beejak/GHOST-PoC/actions/workflows/ci.yml/badge.svg)](https://github.com/beejak/GHOST-PoC/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/downloads/)
@@ -18,8 +20,47 @@
 
 ---
 
+## Progress snapshot (front and center)
+
+What has been delivered so far, with published evidence:
+
+- Core deterministic loop is operational and validated across five harness experiments.
+- Optional local Kubernetes lab pipeline is operational (`bootstrap` -> `inject` -> `collect/normalize/replay`).
+- Published external replay report shows concrete improvement:
+  - before normalization refinement: **`6/11`** detected/resolved, **`0`** false positives
+  - after normalization refinement: **`11/11`** detected/resolved, **`0`** false positives
+- Full report: **[`docs/LAB_RUN_REPORT_20260331.md`](docs/LAB_RUN_REPORT_20260331.md)**
+
+### Data flow: where we started -> where we are now
+
+```mermaid
+flowchart LR
+  subgraph then["Start (initial PoC scope)"]
+    A1[data/seed.py synthetic JSON]
+    A2[Watcher -> Healer]
+    A3[harness.py experiments 1-3]
+    A4[metrics/results.db]
+    A1 --> A2 --> A3 --> A4
+  end
+
+  subgraph now["Current state (expanded scope)"]
+    B1[seed + k8s_clean_signals + near_real_stream]
+    B2[harness.py experiments 1-5 + integrations/validate.py gate]
+    B3[Optional lab pipeline: bootstrap -> inject -> collect]
+    B4[tools/normalize_external_capture.py]
+    B5[external replay scoring]
+    B6[published report + metrics]
+    B1 --> B2 --> B6
+    B3 --> B4 --> B5 --> B6
+  end
+```
+
+---
+
 ## Table of contents
 
+- [Progress snapshot (front and center)](#progress-snapshot-front-and-center)
+- [Data flow: where we started -> where we are now](#data-flow-where-we-started---where-we-are-now)
 - [Overview](#overview)
 - [Why GHOST exists](#why-ghost-exists)
 - [What we built](#what-we-built)
@@ -28,11 +69,16 @@
 - [Kubernetes-style structured signals](#kubernetes-style-structured-signals-experiment-4)
 - [Near-real stream & local adapters](#near-real-stream-experiment-5--local-adapters)
 - [Validation & results](#validation--results)
+- [Published reports](#published-reports)
+- [Command reference](#command-reference)
+- [Use cases](#use-cases)
 - [Data: synthetic vs real logs](#data-synthetic-vs-real-world-samples)
 - [Production & mission-critical systems](#production--mission-critical-systems)
 - [Research: layered failures & learning](#research-layered-failures--learning)
 - [Quick start](#quick-start)
+- [Quick start by persona](#quick-start-by-persona)
 - [Help, FAQ & troubleshooting](#help-faq--troubleshooting)
+- [References & credits](#references--credits)
 - [Project structure](#project-structure)
 - [Documentation index](#documentation-index)
 - [License](#license)
@@ -199,6 +245,54 @@ All runs append structured rows to **`metrics/results.db`** for downstream repor
 
 ---
 
+## Published reports
+
+The repo now includes an executed lab report with concrete artifact paths and replay metrics:
+
+- **[`docs/LAB_RUN_REPORT_20260331.md`](docs/LAB_RUN_REPORT_20260331.md)**
+
+Latest published highlights from that report:
+
+- Initial external replay on captured lab data: **`detected 6/11`**, **`resolved 6/11`**, **`false_positives 0`**.
+- Follow-up normalization fix (`BackOff` pull-image mapping) on the same run: **`detected 11/11`**, **`resolved 11/11`**, **`false_positives 0`**.
+- Production meaning: recall bottleneck was in normalization semantics, not in the core Watcher/Healer execution path.
+
+---
+
+## Command reference
+
+Run all commands from repository root.
+
+| Goal | Command |
+|------|---------|
+| Generate all synthetic datasets | `python data/seed.py` |
+| Run full CI-equivalent harness | `python harness.py` |
+| Watcher-only on a file stream | `python adapters/observe.py data/mixed_stream.json` |
+| Full loop in dry-run mode | `python adapters/lab_run.py --dry-run data/near_real_stream.json` |
+| Full loop with simulator mutation | `python adapters/lab_run.py data/mixed_stream.json` |
+| Bootstrap local K8s lab | `./lab/bootstrap_lab.ps1` |
+| Inject deterministic lab failures | `./lab/inject_failures.ps1` |
+| Collect + normalize + replay lab data | `./lab/collect_and_normalize.ps1` |
+| Manual external replay | `python tools/run_external_replay.py --data data/external/runs/<run-id>/normalized.json --ground-truth data/external/runs/<run-id>/ground_truth.json --record` |
+| Validate integration contract files only | `python integrations/validate.py` |
+
+---
+
+## Use cases
+
+| Use case | What to run | Output / decision value |
+|----------|-------------|--------------------------|
+| Validate policy correctness before any infra work | `python data/seed.py` then `python harness.py` | Reproducible pass/fail across five experiments; blocks policy regressions early. |
+| Observe-only triage on captured logs | `python adapters/observe.py <path-to-json-array>` | Detection events only; no state mutation; safe for shadow analysis. |
+| Dry-run autonomous response rehearsal | `python adapters/lab_run.py --dry-run <path-to-json-array>` | End-to-end detect/decide trace without applying actions. |
+| Evaluate action correctness in simulator | `python adapters/lab_run.py <path-to-json-array>` | Simulated state transitions + post-heal verification outcomes. |
+| Reproduce Kubernetes-style incidents locally | `./lab/bootstrap_lab.ps1`, `./lab/inject_failures.ps1`, `./lab/collect_and_normalize.ps1` | Captured artifacts + replay score on near-real local signals. |
+| Measure external replay quality over time | `python tools/run_external_replay.py ... --record` | Detection/precision/resolution metrics appended for trend tracking. |
+| Author policy updates safely | Edit `skills/` + run `python harness.py` + `python integrations/validate.py` | Enforces skills-as-policy boundary and integration contract completeness. |
+| Prepare production rollout process | Fill `docs/GOVERNANCE.md` | Defines autonomy tiers, blast radius, and change control before live execution. |
+
+---
+
 ## Data: synthetic vs real-world samples
 
 **Nothing stops you from using real or open-source log data** — the project ships synthetic JSON by default for four practical reasons:
@@ -251,7 +345,7 @@ A fill-in template aligned to these ideas (charter, tier definitions, blast radi
 
 Today’s PoC is intentionally small. The next step toward **human-like troubleshooting under incomplete information** is to reason across **layers** (logs, manifests, network, APIs, data) with **specialist agents** and a **coordinator**, not a single log grep.
 
-- **[`docs/VISION_LAYERED_LEARNING.md`](docs/VISION_LAYERED_LEARNING.md)** — layered failure model, partial observability, swarm-style roles (Hermes-like orchestration without claiming a product), **topology-aware** bias, an honest taxonomy of **feedback loops**, and how **AI virtual dev teams** (e.g. [gstack](https://github.com/garrytan/gstack)) fit **next to** GHOST as policy/code authors—not unguarded prod operators.  
+- **[`docs/VISION_LAYERED_LEARNING.md`](docs/VISION_LAYERED_LEARNING.md)** — layered failure model, partial observability, swarm-style roles (Hermes-like orchestration without claiming a product), **topology-aware** bias, an honest taxonomy of **feedback loops**, and how external development tooling (e.g. [gstack](https://github.com/garrytan/gstack)) fits **next to** GHOST as policy/code authoring support—not unguarded prod operators.  
 - **`metrics/feedback.py`** — after each `harness.py` run, an append-only **`feedback_rows`** record is stored in `metrics/results.db` with pass/fail flags for **all five** experiments, layer tags (including `log_near_real_noisy`), and **policy (`skills`) versions** so batch jobs can correlate outcomes with policy state (hook for **offline** policy improvement — not online learning in agents).
 
 Agents here **do not** perform online gradient descent; “learning” means **closing the loop** from verified outcomes into **policy updates** you promote through tests.
@@ -275,6 +369,19 @@ Optional: `python data/seed.py --seed 123` — different shuffle of failures ins
 
 ---
 
+## Quick start by persona
+
+| Persona | Fastest path | Why this path |
+|---------|--------------|---------------|
+| **Operator / SRE evaluator** | `python data/seed.py` -> `python harness.py` | Confirms baseline policy correctness before touching any lab tooling. |
+| **Policy author (skills editor)** | Edit `skills/` -> `python data/seed.py` -> `python harness.py` | Ensures every rule change is validated across all five experiments. |
+| **Shadow-mode reviewer** | `python adapters/observe.py data/mixed_stream.json` | Lets you inspect detections without mutation side effects. |
+| **Autonomy rehearsal owner** | `python adapters/lab_run.py --dry-run data/near_real_stream.json` | Exercises full detect/decide flow while staying non-destructive. |
+| **Lab pipeline engineer** | `./lab/bootstrap_lab.ps1` -> `./lab/inject_failures.ps1` -> `./lab/collect_and_normalize.ps1` | Produces replayable local K8s-derived data with measurable outcomes. |
+| **Governance / risk lead** | Read `docs/GOVERNANCE.md` + `docs/LAB_RUN_REPORT_20260331.md` | Maps technical results to rollout tiers, blast radius, and controls. |
+
+---
+
 ## Help, FAQ & troubleshooting
 
 | Question | Short answer |
@@ -292,6 +399,24 @@ Optional: `python data/seed.py --seed 123` — different shuffle of failures ins
 3. All timings `0 ms` → expected on fast CPUs; assertions still prove correctness.
 
 For incident-style walkthroughs, licensing notes, and a path to optional `data/external/` workflows, read **[`docs/HELP.md`](docs/HELP.md)**.
+
+---
+
+## References & credits
+
+Attribution for external repositories and upstream projects referenced by this PoC:
+
+| Project | Link | How it is used here |
+|---------|------|---------------------|
+| **GHOST-PoC (this repository)** | [beejak/GHOST-PoC](https://github.com/beejak/GHOST-PoC) | Primary implementation, experiments, docs, and CI. |
+| **gstack** | [garrytan/gstack](https://github.com/garrytan/gstack) | Referenced for skill-oriented AI development workflows; integrated via compatibility docs and maintainer skill patterns under `integrations/gstack/`. |
+| **Hermes Agent (Nous Research)** | [NousResearch/hermes-agent](https://github.com/NousResearch/hermes-agent) | Referenced as an optional external agent runtime; this repo ships only integration contracts/policies in `integrations/hermes/`, not Hermes runtime code. |
+
+Notes on scope and credit:
+
+- This repo does **not** vendor third-party runtime source from gstack or Hermes.
+- Integration is contract-based (policy files, prompts, maintainer guidance), with explicit upstream links for install and licensing.
+- If additional external repos are adopted later, add them here with link, license, and exact usage boundary.
 
 ---
 

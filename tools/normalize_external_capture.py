@@ -45,7 +45,14 @@ def _event_to_record(e: dict[str, Any]) -> dict[str, Any] | None:
         failure_type = "NodeNotReady"
         signal = {"record_type": "Node", "condition": "NotReady", "name": name}
     elif reason == "BackOff":
-        failure_type = "CrashLoopBackOff"
+        low_msg = msg.lower()
+        if "pulling image" in low_msg or "errimagepull" in low_msg or "image pull" in low_msg:
+            # Kubernetes often emits reason=BackOff with message "Back-off pulling image ..."
+            # Treat this as image pull failure so structured signal rules can classify it.
+            failure_type = "ImagePullBackOff"
+            signal = {"record_type": "Pod", "phase": "Pending", "reason": "ImagePullBackOff"}
+        else:
+            failure_type = "CrashLoopBackOff"
     elif reason == "Unhealthy" and (
         "probe failed" in msg.lower() or "connection refused" in msg.lower()
     ):

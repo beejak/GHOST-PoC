@@ -153,7 +153,7 @@ flowchart LR
 
 ---
 
-## 8. AI “virtual dev teams” (e.g. [gstack](https://github.com/garrytan/gstack)) vs GHOST
+## 8. Development team tooling (e.g. [gstack](https://github.com/garrytan/gstack)) vs GHOST
 
 Products marketed as **virtual software development teams** usually focus on **authoring change**: planning features, editing code, opening PRs, running tests in a dev environment. That is **development-time** work with a human reviewer in the loop.
 
@@ -169,7 +169,7 @@ GHOST, as built in this repo, targets **runtime / operations-time** work: **dete
 
 **Reasonable integration patterns**
 
-1. **Policy authoring** — After an incident, the virtual dev team proposes a **diff to `skills/*.py`** (new patterns or decision-table rows) from a ticket; humans merge after `harness.py` passes. GHOST stays deterministic; the AI team is a **faster typist + researcher**, not the executor in prod.  
+1. **Policy authoring** — After an incident, the virtual dev team proposes a **diff to `skills/*.py`** (new patterns or decision-table rows) from a ticket; humans merge after `harness.py` passes. GHOST stays deterministic; the authoring tool is a **faster typist + researcher**, not the executor in prod.  
 2. **Ticket bridge** — GHOST (or your orchestrator) opens/updates an issue with **signal bundle + suggested skill change**; the dev team implements and ships policy in the next release.  
 3. **Separate runtime** — Do **not** let an unconstrained coding swarm **directly** call `gk`, `kubectl`, or cloud APIs during an incident unless that tool is wrapped with the same **guardrails** as the Healer (timeouts, allowlists, audit).
 

@@ -98,6 +98,35 @@ After each successful or failed harness run, check **`metrics/results.db`** tabl
 3. **Verification** — after heal, assert SLO or synthetic check before declaring success.  
 4. **Audit** — log policy version, input hash, action, outcome (you already persist rows; tighten schema).  
 
+## Command help (copy/paste)
+
+Run from repository root:
+
+### Core loop
+
+- Generate synthetic datasets: `python data/seed.py`
+- Run full harness (all five experiments + integration gate): `python harness.py`
+- Validate integration contract paths only: `python integrations/validate.py`
+
+### Adapters (local, not CI)
+
+- Watcher only: `python adapters/observe.py data/mixed_stream.json`
+- Full loop dry-run: `python adapters/lab_run.py --dry-run data/near_real_stream.json`
+- Full loop with simulator actions: `python adapters/lab_run.py data/mixed_stream.json`
+
+### Lab pipeline (local Kubernetes)
+
+- Bootstrap cluster/workload: `./lab/bootstrap_lab.ps1`
+- Inject failures: `./lab/inject_failures.ps1`
+- Collect + normalize + replay: `./lab/collect_and_normalize.ps1`
+- Manual replay: `python tools/run_external_replay.py --data data/external/runs/<run-id>/normalized.json --ground-truth data/external/runs/<run-id>/ground_truth.json --record`
+
+### Typical errors and quick fixes
+
+- `FileNotFoundError` for `data/*.json` -> run `python data/seed.py` first.
+- Integration validation failed -> run `python integrations/validate.py` and restore missing paths.
+- PowerShell script command not found (`kind`/`kubectl`) -> ensure tools are installed and in PATH (or local fallback is configured in script).
+
 **Near-real synthetic stream (Experiment 5)** — After `python data/seed.py`, **`data/near_real_stream.json`** holds 200 records with kube-style timestamps, optional stack prefixes, and JSON-shaped lines; 20 failures are shuffled in. The harness runs the same detect/resolve checks as Experiment 3 with zero false positives expected on the 180 healthy slots.
 
 **Local adapters (not CI)** — From repo root:
@@ -108,9 +137,9 @@ After each successful or failed harness run, check **`metrics/results.db`** tabl
 
 **External lab pipeline (not CI)** — from repo root:
 
-- `pwsh ./lab/bootstrap_lab.ps1`  
-- `pwsh ./lab/inject_failures.ps1`  
-- `pwsh ./lab/collect_and_normalize.ps1`  
+- `./lab/bootstrap_lab.ps1`  
+- `./lab/inject_failures.ps1`  
+- `./lab/collect_and_normalize.ps1`  
 
 Outputs go to `data/external/runs/<run-id>/` (`events.json`, `logs.txt`, `normalized.json`, `ground_truth.json`), then replay through `tools/run_external_replay.py`.
 
@@ -132,6 +161,35 @@ This repo ships **contracts**, not bundled LLM runtimes:
 - **`harness.py`** runs **`integrations/validate.py`** first so those files stay consistent.
 
 Hermes installs from **Nous Research’s GitHub** (see `integrations/hermes/README.md`). **[gstack](https://github.com/garrytan/gstack)** is a separate MIT skill pack for **Claude Code** (and related hosts per its README); it lives under your skills directory / project `.claude` or `.agents` layout—not `pip install`.
+
+---
+
+## Use cases and recommended workflow
+
+| Use case | Recommended path |
+|----------|------------------|
+| Prove baseline correctness after policy edits | `python data/seed.py` -> `python harness.py` |
+| Shadow-mode detection review without side effects | `python adapters/observe.py <your-json-array>` |
+| Dry-run incident rehearsal on near-real synthetic data | `python adapters/lab_run.py --dry-run data/near_real_stream.json` |
+| Local K8s-derived replay with scored outcomes | `./lab/bootstrap_lab.ps1` -> `./lab/inject_failures.ps1` -> `./lab/collect_and_normalize.ps1` |
+| Investigate replay misses and improve recall | inspect `data/external/runs/<run-id>/ground_truth.json` vs detections, then update `tools/normalize_external_capture.py` and rerun replay |
+| Publish measurable progress | update `docs/LAB_RUN_REPORT_YYYYMMDD.md` and summarize before/after metrics in `README.md` |
+
+Published outcome example:
+
+- `docs/LAB_RUN_REPORT_20260331.md` captures a real improvement from `6/11` to `11/11` detection and resolution at `0` false positives after normalization refinement.
+
+---
+
+## References and attribution
+
+External repositories referenced by this project:
+
+- **GHOST repo**: [beejak/GHOST-PoC](https://github.com/beejak/GHOST-PoC)
+- **gstack** (skill workflow reference): [garrytan/gstack](https://github.com/garrytan/gstack)
+- **Hermes Agent** (optional runtime reference): [NousResearch/hermes-agent](https://github.com/NousResearch/hermes-agent)
+
+This repo keeps integrations contract-based (`integrations/`) and does not vendor those external runtimes by default.
 
 ---
 

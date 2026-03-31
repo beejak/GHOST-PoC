@@ -38,6 +38,28 @@ From `tools/run_external_replay.py` output:
 - No false positives were observed in this run.
 - Recall is incomplete (`6/11`), so normalization mappings and/or detection patterns need refinement.
 
+---
+
+## Follow-up normalization fix (same day)
+
+Issue found:
+
+- Kubernetes events with `reason=BackOff` and message `Back-off pulling image ...` were mapped as `CrashLoopBackOff`.
+- That reduced recall because they are semantically `ImagePullBackOff`.
+
+Fix applied:
+
+- `tools/normalize_external_capture.py` now maps `BackOff` + pull-image text to:
+  - `failure_type = ImagePullBackOff`
+  - structured `signal` with `reason = ImagePullBackOff`
+
+Replayed on run `data/external/runs/20260331-140055/`:
+
+- Before fix: `detected 6/11`, `resolved 6/11`, `false_positives 0`
+- After fix: `detected 11/11`, `resolved 11/11`, `false_positives 0`
+
+This confirms the bottleneck was normalization semantics, not healer execution.
+
 ## Immediate next actions
 
 1. Inspect missed ground-truth indices in `ground_truth.json` vs replay detections.
