@@ -47,3 +47,14 @@ The PoC defaults to **synthetic tier-2-shaped** tests in CI. Real tier 0/1 is su
 ## 7. Hermes / external agents
 
 - External tools **propose** edits; they do not replace CI or on-call judgment. See [`integrations/hermes/TOOL_POLICY.json`](../integrations/hermes/TOOL_POLICY.json).
+
+---
+
+## Related documentation
+
+| Document | Role |
+|----------|------|
+| [README.md](../README.md) | Architecture, experiment matrix, quick start. |
+| [HELP.md](HELP.md) | Troubleshooting, FAQ, adapter commands, real-log hygiene. |
+| [VISION_LAYERED_LEARNING.md](VISION_LAYERED_LEARNING.md) | Long-horizon architecture and feedback loops. |
+| [integrations/README.md](../integrations/README.md) | Hermes + gstack integration boundaries. |

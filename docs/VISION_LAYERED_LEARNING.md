@@ -138,6 +138,9 @@ flowchart LR
 | Learning | `metrics/results.db` + **`metrics/feedback.py`** | Each harness run appends a JSON summary to **`feedback_rows`** (`run_id`, payload) for offline learning; add human labels / bandits in a later phase |
 | Real APIs | None | Optional `requirements.txt` phase: kubernetes client, read-only RBAC |
 | Hermes / [gstack](https://github.com/garrytan/gstack)-style tools | [`integrations/`](../integrations/) contracts + `validate.py` in `harness.py` | Hermes: Nous Agent from GitHub + your API keys. gstack: Claude Code skill pack (upstream repo) — not a Python import. |
+| Noisy log stress | **Experiment 5** + `near_real_stream.json` | Synthetic multi-line / prefixed lines; same scoring as mixed stream — not a substitute for prod vocabulary. |
+| Observe / shadow before heal | [`adapters/observe.py`](../adapters/observe.py), `lab_run.py --dry-run`, `heal_once(..., dry_run=True)` | Local and simulator only until you wire real adapters with IAM. |
+| Org rollout checklist | [`docs/GOVERNANCE.md`](../docs/GOVERNANCE.md) | Template only; enforce tiers in your process and infra. |
 
 ---
 
@@ -181,8 +184,10 @@ In short: **yes, you can incorporate a virtual dev team into your *overall* syst
 
 ## 9. Further reading in this repository
 
-- [README.md](../README.md) — what is implemented today.  
-- [HELP.md](HELP.md) — operations, real vs synthetic data.  
-- [Ghost PoC.md.txt](../Ghost%20PoC.md.txt) — original Phase 1 specification.
+- [README.md](../README.md) — what is implemented today (five harness experiments, adapters, validate gate).  
+- [HELP.md](HELP.md) — operations, real vs synthetic data, adapter commands.  
+- [GOVERNANCE.md](GOVERNANCE.md) — autonomy tiers and rollout template (fill in for your org).  
+- [Ghost PoC.md.txt](../Ghost%20PoC.md.txt) — original Phase 1 specification + **addendum** for Experiments 4–5 in the reference repo.  
+- [integrations/README.md](../integrations/README.md) — Hermes / gstack contracts.
 
 When you implement pieces of this vision, **update this document** so the gap between aspiration and code stays honest.

@@ -27,8 +27,14 @@ From repo root:
 ```bash
 python data/seed.py
 python harness.py
-python integrations/validate.py
 ```
+
+(`harness.py` runs `integrations/validate.py` first; you can run it alone for a quick contract check.)
+
+## Optional local tools
+
+- **`adapters/observe.py`** — Watcher-only on a JSON log array.  
+- **`adapters/lab_run.py --dry-run`** — full loop without mutating simulator state (`heal_once(..., dry_run=True)`).
 
 ## Output
 

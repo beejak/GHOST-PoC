@@ -19,6 +19,13 @@ Follow the official guide: install script or `pip install git+https://github.com
 
 4. Record outcomes in your incident / PR process; optional: this repo already appends **`feedback_rows`** in `metrics/results.db` when `harness.py` runs.
 
+`TOOL_POLICY.json` **shell_allowlist** includes the CI commands plus optional local tools, for example:
+
+- `python adapters/observe.py data/mixed_stream.json`  
+- `python adapters/lab_run.py --dry-run data/near_real_stream.json`  
+
+Adapt the allowlist if your paths differ; do not widen shell access without review.
+
 ## Limitations
 
 - Hermes’ feature set and install path **change upstream**; this repo only ships **policy JSON + prompts**, not a pinned integration test against their library.  

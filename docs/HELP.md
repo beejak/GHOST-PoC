@@ -9,7 +9,7 @@ This document expands on the [README](../README.md). Use it for troubleshooting,
 | Symptom | Likely cause | What to do |
 |--------|----------------|------------|
 | `FileNotFoundError` for `clean_failures.json` (or other `data/*.json`) | Generated data not created yet | Run `python data/seed.py` from the repository root, then `python harness.py`. |
-| `Experiment 1/2/3/4 failed` | Logic regression or stale `skills/` out of sync with `seed.py` | Re-run `seed.py`; if it still fails, compare `skills/watcher_skills.py` / `k8s_signal_skills.py` / `healer_skills.py` with the failing experiment in `experiments/`. |
+| `Experiment 1/2/3/4/5 failed` or `Integration contract validation failed` | Logic regression, stale `skills/`, missing generated `near_real_*.json`, or deleted contract files | Re-run `python data/seed.py`. If it persists, compare `skills/` with `experiments/run_experiment*.py`. For **Integration contract**, ensure files listed in `integrations/validate.py` exist (e.g. `docs/GOVERNANCE.md`, `adapters/*.py`). |
 | `Healthy baseline assertion failed` | A healthy template now overlaps a detection pattern | Adjust `HEALTHY_TEMPLATES` in `data/seed.py` or narrow patterns in `skills/watcher_skills.py`; keep casefold behavior in mind. |
 | `UnicodeEncodeError` on Windows console | Rare if seed uses ASCII separators | Prefer UTF-8 console (`chcp 65001`) or run in CI (Linux). |
 | All timings show `0 ms` | Normal on fast hardware | Correctness is from assertions; add delay in `data/generator.py` if you need wall-clock spread. |
@@ -62,7 +62,7 @@ Today’s agents are **not** machine-learning models. They do **substring / rule
 3. **Normalize** lines into the same JSON shape as `clean_failures.json` (see examples under `data/` after `seed.py`).  
 4. **Redact** aggressively (IPs, tokens, user paths) before sharing or committing **derived** fixtures.  
 5. Add a **private** or **gitignored** directory (e.g. `data/external/`) and optional scripts to convert vendor format → GHOST JSON.  
-6. Extend the harness or add Experiment 5 that reads your file — keep CI on **synthetic** data only unless you use a **public** pinned snapshot with a documented license.
+6. For **private** corpora, add a separate experiment script or fork `run_experiment3` / `run_experiment5` to read your file — keep **CI** on **`seed.py`-generated** synthetic data unless you adopt a **public** pinned snapshot with a documented license.
 
 **Categories of public sources people use** (verify license yourself)
 
@@ -74,7 +74,7 @@ We do **not** ship third-party log files in this repo to avoid legal and hygiene
 
 ### How do I run only one experiment?
 
-The harness runs all four. For ad-hoc runs, use a short Python snippet or temporary script that `asyncio.run()`s the specific `experiments/run_experimentN.run(...)` with a `Recorder` or `None`. (Keeping one entrypoint avoids drift in CI.)
+The harness runs **all five** experiments in order, after `integrations/validate.py`. For ad-hoc runs, use a short script that `asyncio.run()`s the specific `experiments/run_experimentN.run(...)` with a `Recorder` or `None`. (Keeping one CI entrypoint avoids drift.)
 
 ### Where are results stored?
 
@@ -130,4 +130,6 @@ Hermes installs from **Nous Research’s GitHub** (see `integrations/hermes/READ
 
 ## Document history
 
-This file is maintained alongside the code. When you add experiments or change the data contract, update **this file** and the **README** “Documentation” table so newcomers are not misled.
+This file is maintained alongside the code. When you add experiments or change the data contract, update **this file**, **[README.md](../README.md)**, **[Ghost PoC.md.txt](../Ghost%20PoC.md.txt)** (addendum if applicable), and **[VISION_LAYERED_LEARNING.md](VISION_LAYERED_LEARNING.md)** §6 so newcomers are not misled.
+
+**Generated files (after `seed.py`):** `clean_failures.json`, `healthy_baseline.json`, `mixed_stream.json`, `mixed_stream_ground_truth.json`, `k8s_clean_signals.json`, `near_real_stream.json`, `near_real_ground_truth.json` — all under `data/`, all gitignored except what you explicitly commit elsewhere.

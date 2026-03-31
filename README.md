@@ -12,7 +12,7 @@
 [![Dependencies](https://img.shields.io/badge/dependencies-stdlib%20only-success)](requirements.txt)
 [![Phase](https://img.shields.io/badge/phase-1%20PoC-6f42c1)](Ghost%20PoC.md.txt)
 
-[**Repository**](https://github.com/beejak/GHOST-PoC) · [**Specification**](Ghost%20PoC.md.txt) · [**Help & FAQ**](docs/HELP.md) · [**Quick start**](#quick-start)
+[**Repository**](https://github.com/beejak/GHOST-PoC) · [**Specification**](Ghost%20PoC.md.txt) · [**Help & FAQ**](docs/HELP.md) · [**Governance template**](docs/GOVERNANCE.md) · [**Quick start**](#quick-start)
 
 </div>
 
@@ -26,6 +26,7 @@
 - [How it works](#how-it-works)
 - [Detection design (reducing bias)](#detection-design-reducing-bias)
 - [Kubernetes-style structured signals](#kubernetes-style-structured-signals-experiment-4)
+- [Near-real stream & local adapters](#near-real-stream-experiment-5--local-adapters)
 - [Validation & results](#validation--results)
 - [Data: synthetic vs real logs](#data-synthetic-vs-real-world-samples)
 - [Production & mission-critical systems](#production--mission-critical-systems)
@@ -51,8 +52,10 @@ It targets **workload-agnostic** container runtime failure *modes* (OOM-style ki
 | Real cloud / cluster APIs | No (simulated state) |
 | LLM reasoning | No (deterministic matching) |
 | External Python packages | No (standard library) |
-| Repeatable experiment suite | Yes (`harness.py`) |
+| Repeatable experiment suite | Yes (`harness.py` — five experiments + SQLite metrics) |
 | Policy separated from agent code | Yes (`skills/` modules) |
+| Integration contract gate | Yes (`integrations/validate.py` at start of `harness.py`) |
+| Local file adapters (observe / lab) | Optional (`adapters/` — not in CI) |
 
 ---
 
@@ -95,8 +98,8 @@ Concretely, this repository delivers:
 ## How it works
 
 1. **Watcher** scans each log record (optionally tagged with a **stream index**). If severity is in scope, it walks `DETECTABLE_PATTERNS` in order and publishes **one** event on the first substring hit in `message`.
-2. **Healer** awaits an event, resolves `(action, params)` via `DECISION_TABLE` (or `DEFAULT_ACTION`), runs the matching function in `ACTION_REGISTRY` on `infra_state`, and records **decide / act** timing (wrapped with `asyncio.wait_for` per skill timeouts).
-3. **Harness** drives five experiments: log detection, log full loop, mixed stream (100/10), **structured K8s-style signals** (`k8s_clean_signals.json`), and **near-real noisy stream** (200/20, `near_real_stream.json`).
+2. **Healer** awaits an event, resolves `(action, params)` via `DECISION_TABLE` (or `DEFAULT_ACTION`), runs the matching function in `ACTION_REGISTRY` on `infra_state`, and records **decide / act** timing (wrapped with `asyncio.wait_for` per skill timeouts). For **shadow / lab** use, `heal_once(..., dry_run=True)` resolves the action but **does not** mutate `infra_state`.
+3. **Harness** resets metrics DB, runs **`integrations/validate.py`** (required paths + Hermes policy shape), then drives **five** experiments: log detection, log full loop, mixed stream (100/10), **structured K8s-style signals** (`k8s_clean_signals.json`), and **near-real noisy stream** (200/20, `near_real_stream.json`). On failure it exits non-zero (CI uses the same path).
 
 ```mermaid
 flowchart TB
@@ -144,11 +147,24 @@ This is **not** a live cluster client: it is the **same Watcher → Healer loop*
 
 **Why this matters:** log substring matching alone is **biased** toward whatever format your app prints. Production agents usually combine **typed API objects + events + metrics**. Experiment 4 is a **stdlib-only** stepping stone: swap `signal` ingestion for an informer later without changing the Healer contract.
 
+### Near-real stream (Experiment 5) & local adapters
+
+**Experiment 5** replays **`near_real_stream.json`** (from `seed.py`): **200** records with **kube-style timestamps**, optional **multi-line / stack-ish prefixes**, and sometimes **JSON-shaped** log lines; **20** failures are shuffled among **180** healthy records. It applies the **same** scoring rules as Experiment 3 (detect / false positives / resolve vs `near_real_ground_truth.json`). This is still **synthetic** text — it stress-tests the **current** substring policy, not your production corpus.
+
+**Adapters** (under [`adapters/`](adapters/)) are **optional** tools for local workflows and are **not** executed in CI:
+
+| Script | Purpose |
+|--------|---------|
+| [`adapters/observe.py`](adapters/observe.py) | JSON array file → **Watcher only** → JSONL detection lines (no Healer). |
+| [`adapters/lab_run.py`](adapters/lab_run.py) | Same file → Watcher + Healer on the **simulator**; use **`--dry-run`** to skip `ACTION_REGISTRY` side effects. |
+
+For **rollout tiers**, charter, and game-day checklist (process only), see **[`docs/GOVERNANCE.md`](docs/GOVERNANCE.md)**.
+
 ---
 
 ## Validation & results
 
-**Continuous integration:** every push and pull request to `main` runs [`seed.py`](data/seed.py) and [`harness.py`](harness.py) on Python 3.11 via [GitHub Actions](https://github.com/beejak/GHOST-PoC/actions/workflows/ci.yml) (see the **CI** badge at the top).
+**Continuous integration:** every push and pull request to `main` runs [`seed.py`](data/seed.py) and [`harness.py`](harness.py) on Python 3.11 via [GitHub Actions](https://github.com/beejak/GHOST-PoC/actions/workflows/ci.yml) (see the **CI** badge at the top). `harness.py` first runs [`integrations/validate.py`](integrations/validate.py) (stdlib check for contract files and core paths).
 
 Locally, the same commands execute:
 
@@ -158,10 +174,11 @@ Locally, the same commands execute:
 | **2 — Full loop** | Healer applies correct mutations after each clean failure (infra reset per scenario) | 4 / 4 assertions **PASS** (memory, port, instances, restart semantics) |
 | **3 — Mixed stream** | 100 lines: 90 healthy + 10 injected failures | **10 / 10** detected, **0** false positives on healthy lines, **10 / 10** resolved vs ground truth |
 | **4 — K8s signals** | 6 structured `signal` records (2× image pull paths + scheduling + node + replicas + evicted pod) | **6 / 6** **PASS** |
+| **5 — Near-real noisy stream** | 200 lines: 180 healthy + 20 injected failures (noisy envelopes) | **20 / 20** detected, **0** false positives on healthy lines, **20 / 20** resolved vs ground truth |
 
 **Timing:** On fast local hardware, reported detect/decide/act milliseconds may round to **0 ms**; **correctness** is enforced by assertions, not wall-clock drama. Add delays in the generator or real I/O when you need representative latency distributions.
 
-All runs append structured rows to **`metrics/results.db`** for downstream reporting or dashboards.
+All runs append structured rows to **`metrics/results.db`** for downstream reporting or dashboards. Each successful harness run also appends a JSON summary to **`feedback_rows`** (policy versions, per-experiment pass flags, Experiment 3 and 5 counts) via [`metrics/feedback.py`](metrics/feedback.py).
 
 ---
 
@@ -207,6 +224,8 @@ GHOST Phase 1 is a **laboratory instrument**, not a production controller. The *
 2. **Guardrailed autonomy** — small set of **low-blast**, **reversible** actions with **hard caps** and **shadow mode** first.  
 3. **Expanded policy** — broader coverage only where **harnesses** and **game days** prove safety.
 
+A fill-in template aligned to these ideas (charter, tier definitions, blast radius, drills) lives in **[`docs/GOVERNANCE.md`](docs/GOVERNANCE.md)**.
+
 **Bottom line:** GHOST demonstrates that a **deterministic** autonomous loop can be **built clearly and tested**. For mission-critical workloads, the long-term value is **shorter MTTR on known paths** and **less cognitive load** on operators — provided automation is **constrained**, **observable**, and **never** the only line of defense.
 
 ---
@@ -216,7 +235,7 @@ GHOST Phase 1 is a **laboratory instrument**, not a production controller. The *
 Today’s PoC is intentionally small. The next step toward **human-like troubleshooting under incomplete information** is to reason across **layers** (logs, manifests, network, APIs, data) with **specialist agents** and a **coordinator**, not a single log grep.
 
 - **[`docs/VISION_LAYERED_LEARNING.md`](docs/VISION_LAYERED_LEARNING.md)** — layered failure model, partial observability, swarm-style roles (Hermes-like orchestration without claiming a product), **topology-aware** bias, an honest taxonomy of **feedback loops**, and how **AI virtual dev teams** (e.g. [gstack](https://github.com/garrytan/gstack)) fit **next to** GHOST as policy/code authors—not unguarded prod operators.  
-- **`metrics/feedback.py`** — after each `harness.py` run, an append-only **`feedback_rows`** record is stored in `metrics/results.db` with pass/fail flags, layer tags, and **policy (`skills`) versions** so future jobs can correlate outcomes with policy state (the first concrete hook for **self-improvement pipelines**).
+- **`metrics/feedback.py`** — after each `harness.py` run, an append-only **`feedback_rows`** record is stored in `metrics/results.db` with pass/fail flags for **all five** experiments, layer tags (including `log_near_real_noisy`), and **policy (`skills`) versions** so batch jobs can correlate outcomes with policy state (hook for **offline** policy improvement — not online learning in agents).
 
 Agents here **do not** perform online gradient descent; “learning” means **closing the loop** from verified outcomes into **policy updates** you promote through tests.
 
@@ -245,7 +264,7 @@ Optional: `python data/seed.py --seed 123` — different shuffle of failures ins
 |----------|----------------|
 | **Why no real logs in the repo?** | Reproducibility, CI, licensing, and secret/PII risk — see [Data: synthetic vs real](#data-synthetic-vs-real-world-samples) above. |
 | **Can we download open-source log datasets to “train” the agents?** | **Yes, locally**, if the license fits your use case. Today’s agents are **rule-based**; you refine **skills** and re-run the harness, not a model trainer. Normalize into the same JSON shape as generated `clean_failures.json`. |
-| **Harness failed on experiment N** | Re-run `python data/seed.py`. If it persists, open `docs/HELP.md` → *Quick troubleshooting* and match the error pattern. |
+| **Harness failed on experiment N** | Re-run `python data/seed.py`. If it persists, open `docs/HELP.md` → *Quick troubleshooting* and match the error pattern. **Integration contract validation failed** means `integrations/validate.py` exited non-zero (missing contract file or expected path). |
 | **Where is detailed help?** | **[`docs/HELP.md`](docs/HELP.md)** — troubleshooting table, extended FAQ, extension patterns, support pointers. |
 | **How do I change detection or healing?** | Only via `skills/` and `simulator/infra_state.py`; never duplicate tables inside `agents/`. |
 
@@ -299,6 +318,8 @@ GHOST-PoC/
 | [**Ghost PoC.md.txt**](Ghost%20PoC.md.txt) | Formal specification, definition of done, build order, synthetic vs real appendix. |
 | [**data/external/README.md**](data/external/README.md) | Where optional local / redacted corpora go and what **not** to commit. |
 | [**integrations/README.md**](integrations/README.md) | **Hermes** (Nous) tool policy + maintainer skill aligned with **[gstack](https://github.com/garrytan/gstack)**; `validate.py` runs inside `harness.py`. |
+| [**integrations/hermes/README.md**](integrations/hermes/README.md) | Installing Hermes upstream; mapping `TOOL_POLICY.json` to your tool config. |
+| [**integrations/gstack/README.md**](integrations/gstack/README.md) | Vendoring / using the gstack-compatible maintainer skill next to upstream gstack. |
 
 ---
 

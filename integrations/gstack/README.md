@@ -12,8 +12,10 @@ There is **no** `pip install gstack` for use inside this Python harness; gstack 
 
 1. Install gstack from upstream if you want the full command set; optionally add this repo’s maintainer skill alongside it.  
 2. Human or IDE agent edits `skills/` per the maintainer skill.  
-3. From the **repository root**: `python data/seed.py` and `python harness.py`.  
+3. From the **repository root**: `python data/seed.py` and `python harness.py` (five experiments + `integrations/validate.py` gate).  
 4. Open a PR; CI should stay green.
+
+Optional local checks (not gstack-specific): **[`adapters/`](../adapters/)** for `observe.py` / `lab_run.py`; org rollout template **[`docs/GOVERNANCE.md`](../docs/GOVERNANCE.md)**.
 
 ## Boundary
 

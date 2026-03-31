@@ -410,6 +410,15 @@ writes results to SQLite. Plain Python. No test framework.
 - Compares detections against `data/mixed_stream_ground_truth.json`
 - Reports detection rate, false positive rate, resolution rate, MTTR
 
+**Experiment 4 (reference repo extension) â€” Kubernetes-style structured signals**
+- `agents/k8s_watcher.py` + `skills/k8s_signal_skills.py`
+- Full loop on `data/k8s_clean_signals.json` with K8s-shaped `signal` objects
+
+**Experiment 5 (reference repo extension) â€” Near-real noisy log stream**
+- Same scoring as Experiment 3 on `data/near_real_stream.json` (200 records, 20 injected failures, noisy envelopes) vs `near_real_ground_truth.json`
+
+**Integration gate (reference repo)** â€” `harness.py` runs `integrations/validate.py` before experiments.
+
 ### Harness Assertions
 
 ```python
@@ -536,7 +545,18 @@ The POC is complete when all of the following are true:
 14. Results written to `metrics/results.db`
 15. System runs with two commands: `python data/seed.py` then `python harness.py`
 
-**Nothing else is in scope.**
+**Nothing else is in scope** for the *original* Phase 1 paragraph above.
+
+### Addendum â€” reference repository (GHOST-PoC on GitHub)
+
+The published reference implementation extends items 1â€“15 with:
+
+- Additional datasets from `data/seed.py`: `k8s_clean_signals.json`, `near_real_stream.json`, `near_real_ground_truth.json`.
+- **Experiments 4â€“5** and **`integrations/validate.py`** at harness start (see README.md).
+- **`adapters/observe.py`** and **`adapters/lab_run.py`** (optional local tools); **`heal_once(..., dry_run=True)`** on the Healer.
+- **`docs/GOVERNANCE.md`**, **`integrations/`** (Hermes + gstack contracts).
+
+CI definition of done for that repo: `python data/seed.py` then `python harness.py` with **all five** experiments PASS.
 
 ---
 
