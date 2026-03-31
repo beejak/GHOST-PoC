@@ -175,6 +175,8 @@ One-command wrapper (PowerShell): `lab/collect_and_normalize.ps1`.
 
 This path is **local-only** and **not wired into `harness.py`** or CI.
 
+Latest published local lab run report: **[`docs/LAB_RUN_REPORT_20260331.md`](docs/LAB_RUN_REPORT_20260331.md)**.
+
 ---
 
 ## Validation & results
@@ -332,6 +334,7 @@ GHOST-PoC/
 | [**docs/HELP.md**](docs/HELP.md) | **World-class operational help:** troubleshooting matrix, full FAQ (*including real vs synthetic logs*), extension guide, support. |
 | [**docs/VISION_LAYERED_LEARNING.md**](docs/VISION_LAYERED_LEARNING.md) | **Research architecture:** layered failures, partial info, runtime swarm pattern, feedback roadmap, **virtual dev team vs GHOST** boundary. |
 | [**docs/GOVERNANCE.md**](docs/GOVERNANCE.md) | **Rollout template:** autonomy tiers, policy change control, blast radius, game days (fill in for your org). |
+| [**docs/LAB_RUN_REPORT_20260331.md**](docs/LAB_RUN_REPORT_20260331.md) | First executed local lab pipeline report (artifacts + replay metrics). |
 | [**Ghost PoC.md.txt**](Ghost%20PoC.md.txt) | Formal specification, definition of done, build order, synthetic vs real appendix. |
 | [**data/external/README.md**](data/external/README.md) | Where optional local / redacted corpora go and what **not** to commit. |
 | [**lab/README.md**](lab/README.md) | Minimal lab workflow to generate external data and replay it locally. |

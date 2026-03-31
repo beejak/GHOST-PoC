@@ -13,19 +13,19 @@ Purpose: generate more realistic **local** data from a throwaway Kubernetes lab 
 1. Bootstrap lab cluster + workload:
 
 ```powershell
-pwsh ./lab/bootstrap_lab.ps1
+./lab/bootstrap_lab.ps1
 ```
 
 2. Inject deterministic failures (ImagePullBackOff, CrashLoopBackOff, probe-unhealthy):
 
 ```powershell
-pwsh ./lab/inject_failures.ps1
+./lab/inject_failures.ps1
 ```
 
 3. Collect + normalize + replay in one step:
 
 ```powershell
-pwsh ./lab/collect_and_normalize.ps1
+./lab/collect_and_normalize.ps1
 ```
 
 Outputs are created under `data/external/runs/<run-id>/`:
@@ -46,3 +46,4 @@ python tools/run_external_replay.py --data data/external/runs/<run-id>/normalize
 - This pipeline is **not** in CI.
 - It is intentionally narrow: one namespace (`ghost-lab`), one deployment (`app-service`), and a small failure set.
 - Data under `data/external/` stays gitignored by default.
+- Scripts are fail-fast: they now stop immediately on any failed `kubectl`/Python command.

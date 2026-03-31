@@ -118,6 +118,8 @@ Direct replay command:
 
 - `python tools/run_external_replay.py --data data/external/runs/<run-id>/normalized.json --ground-truth data/external/runs/<run-id>/ground_truth.json --record`
 
+Published executed run: **[`docs/LAB_RUN_REPORT_20260331.md`](LAB_RUN_REPORT_20260331.md)**.
+
 Org-facing rollout checklist: **[`docs/GOVERNANCE.md`](../docs/GOVERNANCE.md)** (template).
 
 ---

@@ -6,6 +6,7 @@ venv/
 .venv/
 *.egg-info/
 dist/
+.tools/
 data/clean_failures.json
 data/healthy_baseline.json
 data/mixed_stream.json
