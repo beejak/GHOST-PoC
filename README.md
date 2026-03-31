@@ -89,6 +89,7 @@ Concretely, this repository delivers:
 | **Streaming** | `data/generator.py` — async replay of JSON records for experiments. |
 | **Experiments** | `run_experiment1.py` … `run_experiment5.py` — through mixed stream, K8s signals, and **near-real noisy** stream stress test. |
 | **Adapters (optional)** | `adapters/observe.py` (Watcher-only file tail), `adapters/lab_run.py` (`--dry-run` or full loop on simulator). Not run in CI. |
+| **Lab data pipeline (optional)** | `lab/` + `tools/` scripts: bootstrap/inject/collect/normalize/replay for external datasets; local only, not in CI. |
 | **Harness & metrics** | `harness.py` + `metrics/recorder.py` — orchestrates all scenarios, prints a summary, persists rows to `metrics/results.db`. |
 
 **Design rule:** agents never duplicate patterns or decision tables inline — **skills are the single source of truth** for review, diff, and compliance-style audits.
@@ -159,6 +160,20 @@ This is **not** a live cluster client: it is the **same Watcher → Healer loop*
 | [`adapters/lab_run.py`](adapters/lab_run.py) | Same file → Watcher + Healer on the **simulator**; use **`--dry-run`** to skip `ACTION_REGISTRY` side effects. |
 
 For **rollout tiers**, charter, and game-day checklist (process only), see **[`docs/GOVERNANCE.md`](docs/GOVERNANCE.md)**.
+
+### External lab replay pipeline (optional)
+
+For higher-fidelity local data without expanding CI scope, this repo includes a minimal pipeline:
+
+1. Bootstrap lab and deploy a test workload (`lab/bootstrap_lab.ps1`).  
+2. Inject deterministic failures (`lab/inject_failures.ps1`).  
+3. Collect events/logs (`tools/collect_k8s_lab_data.py`).  
+4. Normalize to GHOST replay shape + ground truth (`tools/normalize_external_capture.py`).  
+5. Score with the same Watcher/Healer loop (`tools/run_external_replay.py` → `experiments/run_experiment_external.py`).
+
+One-command wrapper (PowerShell): `lab/collect_and_normalize.ps1`.
+
+This path is **local-only** and **not wired into `harness.py`** or CI.
 
 ---
 
@@ -286,6 +301,8 @@ GHOST-PoC/
 │   ├── HELP.md             # In-depth help, FAQ, real-log guidance, troubleshooting
 │   └── GOVERNANCE.md       # Template: tiers, charter, game days (org process; not enforced in code)
 ├── adapters/               # Optional observe / lab_run (local files → agents)
+├── lab/                    # Optional K8s lab scripts/manifests (bootstrap/inject/pipeline wrapper)
+├── tools/                  # External data pipeline scripts (collect/normalize/replay)
 ├── integrations/           # Hermes + gstack-compatible contracts; validate.py (no LLM in CI)
 ├── skills/                 # Policy: log patterns, K8s signal rules, decision table
 ├── agents/                 # Watcher, K8s watcher & Healer (import skills only)
@@ -317,6 +334,8 @@ GHOST-PoC/
 | [**docs/GOVERNANCE.md**](docs/GOVERNANCE.md) | **Rollout template:** autonomy tiers, policy change control, blast radius, game days (fill in for your org). |
 | [**Ghost PoC.md.txt**](Ghost%20PoC.md.txt) | Formal specification, definition of done, build order, synthetic vs real appendix. |
 | [**data/external/README.md**](data/external/README.md) | Where optional local / redacted corpora go and what **not** to commit. |
+| [**lab/README.md**](lab/README.md) | Minimal lab workflow to generate external data and replay it locally. |
+| [**tools/README.md**](tools/README.md) | Collect / normalize / replay scripts for external datasets. |
 | [**integrations/README.md**](integrations/README.md) | **Hermes** (Nous) tool policy + maintainer skill aligned with **[gstack](https://github.com/garrytan/gstack)**; `validate.py` runs inside `harness.py`. |
 | [**integrations/hermes/README.md**](integrations/hermes/README.md) | Installing Hermes upstream; mapping `TOOL_POLICY.json` to your tool config. |
 | [**integrations/gstack/README.md**](integrations/gstack/README.md) | Vendoring / using the gstack-compatible maintainer skill next to upstream gstack. |

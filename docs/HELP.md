@@ -106,6 +106,18 @@ After each successful or failed harness run, check **`metrics/results.db`** tabl
 - `python adapters/lab_run.py --dry-run data/near_real_stream.json` — full loop without mutating `infra_state`.  
 - `python adapters/lab_run.py data/mixed_stream.json` — full loop against the simulator (same as harness-style behavior on that file).
 
+**External lab pipeline (not CI)** — from repo root:
+
+- `pwsh ./lab/bootstrap_lab.ps1`  
+- `pwsh ./lab/inject_failures.ps1`  
+- `pwsh ./lab/collect_and_normalize.ps1`  
+
+Outputs go to `data/external/runs/<run-id>/` (`events.json`, `logs.txt`, `normalized.json`, `ground_truth.json`), then replay through `tools/run_external_replay.py`.
+
+Direct replay command:
+
+- `python tools/run_external_replay.py --data data/external/runs/<run-id>/normalized.json --ground-truth data/external/runs/<run-id>/ground_truth.json --record`
+
 Org-facing rollout checklist: **[`docs/GOVERNANCE.md`](../docs/GOVERNANCE.md)** (template).
 
 ---
@@ -134,3 +146,5 @@ Hermes installs from **Nous Research’s GitHub** (see `integrations/hermes/READ
 This file is maintained alongside the code. When you add experiments or change the data contract, update **this file**, **[README.md](../README.md)**, **[Ghost PoC.md.txt](../Ghost%20PoC.md.txt)** (addendum if applicable), and **[VISION_LAYERED_LEARNING.md](VISION_LAYERED_LEARNING.md)** §6 so newcomers are not misled.
 
 **Generated files (after `seed.py`):** `clean_failures.json`, `healthy_baseline.json`, `mixed_stream.json`, `mixed_stream_ground_truth.json`, `k8s_clean_signals.json`, `near_real_stream.json`, `near_real_ground_truth.json` — all under `data/`, all gitignored except what you explicitly commit elsewhere.
+
+**Generated files (after lab pipeline):** `data/external/runs/<run-id>/events.json`, `logs.txt`, `normalized.json`, `ground_truth.json` (gitignored by default).

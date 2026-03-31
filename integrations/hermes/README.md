@@ -23,6 +23,7 @@ Follow the official guide: install script or `pip install git+https://github.com
 
 - `python adapters/observe.py data/mixed_stream.json`  
 - `python adapters/lab_run.py --dry-run data/near_real_stream.json`  
+- `python tools/run_external_replay.py --data data/external/runs/demo/normalized.json --ground-truth data/external/runs/demo/ground_truth.json`  
 
 Adapt the allowlist if your paths differ; do not widen shell access without review.
 

@@ -48,6 +48,11 @@ def main() -> int:
         "adapters/observe.py",
         "adapters/lab_run.py",
         "experiments/run_experiment5.py",
+        "experiments/run_experiment_external.py",
+        "lab/README.md",
+        "tools/collect_k8s_lab_data.py",
+        "tools/normalize_external_capture.py",
+        "tools/run_external_replay.py",
     ]
     missing = [p for p in required_paths if not (ROOT / p).is_file()]
     if missing:

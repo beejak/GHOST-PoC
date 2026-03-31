@@ -11,7 +11,7 @@ This folder does **not** vendor third-party agent runtimes. It provides **contra
 |------|------------|
 | [`hermes/`](hermes/) | Tool/write boundaries + notes for [Nous Hermes Agent](https://hermes-agent.nousresearch.com/) (install from their GitHub, not PyPI). |
 | [`gstack/`](gstack/) | Maintainer skill text compatible with **[gstack](https://github.com/garrytan/gstack)** (Claude Code skills; also Codex/Cursor paths in upstream docs). Not `import gstack` in Python. |
-| [`validate.py`](validate.py) | **Stdlib-only** checks: Hermes `TOOL_POLICY.json` shape, and that core paths exist (`skills/`, `agents/`, `harness.py`, `docs/GOVERNANCE.md`, `adapters/observe.py`, `adapters/lab_run.py`, `experiments/run_experiment5.py`, etc.). **Invoked at the start of `harness.py`** (and thus in CI). |
+| [`validate.py`](validate.py) | **Stdlib-only** checks: Hermes `TOOL_POLICY.json` shape, and that core paths exist (`skills/`, `agents/`, `harness.py`, `docs/GOVERNANCE.md`, adapters, external replay experiment, lab/tool scripts). **Invoked at the start of `harness.py`** (and thus in CI). |
 
 ## Trade-offs (no marketing)
 
@@ -27,3 +27,5 @@ This folder does **not** vendor third-party agent runtimes. It provides **contra
 2. Use **Hermes or GStack** to **propose** diffs to `skills/` or docs; merge only after `python data/seed.py` and `python harness.py` pass.  
 3. Run `python integrations/validate.py` locally after changing integration contracts, or rely on **`harness.py`** (which runs it first).  
 4. Rollout / autonomy tiers for your org are **not** enforced here — use **[`docs/GOVERNANCE.md`](../docs/GOVERNANCE.md)** as a template.
+
+External data pipeline lives in `lab/` and `tools/`; it is local-only and not part of CI.
