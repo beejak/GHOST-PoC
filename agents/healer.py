@@ -20,8 +20,10 @@ async def heal_once(
     bus: EventBus,
     infra_state: dict[str, Any],
     on_outcome: Callable[[dict[str, Any]], None] | None = None,
+    *,
+    dry_run: bool = False,
 ) -> dict[str, Any]:
-    """Consume one event, look up action, execute, return outcome dict."""
+    """Consume one event, look up action, execute (or skip mutate if dry_run), return outcome."""
     event = await bus.consume()
     failure_type = event["failure_type"]
 
@@ -39,6 +41,8 @@ async def heal_once(
 
     async def run_action() -> None:
         await asyncio.sleep(0)
+        if dry_run:
+            return
         fn = ACTION_REGISTRY[action_name]
         fn(infra_state, **action_params)
 
@@ -60,6 +64,7 @@ async def heal_once(
         "decide_ms": decide_ms,
         "act_ms": act_ms,
         "stream_index": event["raw_log"].get("stream_index"),
+        "dry_run": dry_run,
     }
     if on_outcome:
         on_outcome(outcome)

@@ -82,9 +82,10 @@ Concretely, this repository delivers:
 | **Healer agent** | `agents/healer.py` — imports the decision table **only** from healer skills; executes registered actions against shared state. |
 | **Event fabric** | `blackboard/event_bus.py` — `asyncio.Queue` with schema validation (typed handoff between agents). |
 | **Simulated platform** | `simulator/infra_state.py` — `app-service` baseline dict; container actions plus **K8s-shaped** fields (`image`, `replicas_*`, `scheduling_blocked`, `node_ready`) and matching heal actions. |
-| **Synthetic data** | `data/seed.py` — log datasets as before, plus **`k8s_clean_signals.json`** (Pod / Node / Deployment style records); outputs are **gitignored**. |
+| **Synthetic data** | `data/seed.py` — log datasets, **`k8s_clean_signals.json`**, plus **`near_real_stream.json`** (200 noisy multi-line / kube-prefixed lines, 20 failures); outputs are **gitignored**. |
 | **Streaming** | `data/generator.py` — async replay of JSON records for experiments. |
-| **Experiments** | `experiments/run_experiment1.py` … `run_experiment4.py` — logs + **Experiment 4** full loop on synthetic K8s-style signals. |
+| **Experiments** | `run_experiment1.py` … `run_experiment5.py` — through mixed stream, K8s signals, and **near-real noisy** stream stress test. |
+| **Adapters (optional)** | `adapters/observe.py` (Watcher-only file tail), `adapters/lab_run.py` (`--dry-run` or full loop on simulator). Not run in CI. |
 | **Harness & metrics** | `harness.py` + `metrics/recorder.py` — orchestrates all scenarios, prints a summary, persists rows to `metrics/results.db`. |
 
 **Design rule:** agents never duplicate patterns or decision tables inline — **skills are the single source of truth** for review, diff, and compliance-style audits.
@@ -95,7 +96,7 @@ Concretely, this repository delivers:
 
 1. **Watcher** scans each log record (optionally tagged with a **stream index**). If severity is in scope, it walks `DETECTABLE_PATTERNS` in order and publishes **one** event on the first substring hit in `message`.
 2. **Healer** awaits an event, resolves `(action, params)` via `DECISION_TABLE` (or `DEFAULT_ACTION`), runs the matching function in `ACTION_REGISTRY` on `infra_state`, and records **decide / act** timing (wrapped with `asyncio.wait_for` per skill timeouts).
-3. **Harness** drives four experiments: log detection, log full loop, mixed stream, and **structured K8s-style signals** (`k8s_clean_signals.json`) with **per-scenario** `apply_k8s_failure_preset` + heal + assert.
+3. **Harness** drives five experiments: log detection, log full loop, mixed stream (100/10), **structured K8s-style signals** (`k8s_clean_signals.json`), and **near-real noisy stream** (200/20, `near_real_stream.json`).
 
 ```mermaid
 flowchart TB
@@ -263,7 +264,9 @@ For incident-style walkthroughs, licensing notes, and a path to optional `data/e
 ```
 GHOST-PoC/
 ├── docs/
-│   └── HELP.md             # In-depth help, FAQ, real-log guidance, troubleshooting
+│   ├── HELP.md             # In-depth help, FAQ, real-log guidance, troubleshooting
+│   └── GOVERNANCE.md       # Template: tiers, charter, game days (org process; not enforced in code)
+├── adapters/               # Optional observe / lab_run (local files → agents)
 ├── integrations/           # Hermes + gstack-compatible contracts; validate.py (no LLM in CI)
 ├── skills/                 # Policy: log patterns, K8s signal rules, decision table
 ├── agents/                 # Watcher, K8s watcher & Healer (import skills only)
@@ -274,7 +277,7 @@ GHOST-PoC/
 │   ├── generator.py        # Async JSON stream for harness
 │   ├── scenarios.json      # Scenario metadata
 │   └── external/           # Gitignored drops for redacted real samples (README only in git)
-├── experiments/            # Experiment 1–4 runners
+├── experiments/            # Experiment 1–5 runners
 ├── metrics/                # SQLite recorder, reporter, harness feedback ledger
 ├── harness.py              # Single entrypoint: all experiments
 ├── Ghost PoC.md.txt        # Full build specification
@@ -292,6 +295,7 @@ GHOST-PoC/
 | [**README.md**](README.md) (this file) | First-time orientation, architecture, validation summary, quick start. |
 | [**docs/HELP.md**](docs/HELP.md) | **World-class operational help:** troubleshooting matrix, full FAQ (*including real vs synthetic logs*), extension guide, support. |
 | [**docs/VISION_LAYERED_LEARNING.md**](docs/VISION_LAYERED_LEARNING.md) | **Research architecture:** layered failures, partial info, runtime swarm pattern, feedback roadmap, **virtual dev team vs GHOST** boundary. |
+| [**docs/GOVERNANCE.md**](docs/GOVERNANCE.md) | **Rollout template:** autonomy tiers, policy change control, blast radius, game days (fill in for your org). |
 | [**Ghost PoC.md.txt**](Ghost%20PoC.md.txt) | Formal specification, definition of done, build order, synthetic vs real appendix. |
 | [**data/external/README.md**](data/external/README.md) | Where optional local / redacted corpora go and what **not** to commit. |
 | [**integrations/README.md**](integrations/README.md) | **Hermes** (Nous) tool policy + maintainer skill aligned with **[gstack](https://github.com/garrytan/gstack)**; `validate.py` runs inside `harness.py`. |

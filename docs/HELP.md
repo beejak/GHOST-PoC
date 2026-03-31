@@ -97,6 +97,16 @@ After each successful or failed harness run, check **`metrics/results.db`** tabl
 3. **Verification** — after heal, assert SLO or synthetic check before declaring success.  
 4. **Audit** — log policy version, input hash, action, outcome (you already persist rows; tighten schema).  
 
+**Near-real synthetic stream (Experiment 5)** — After `python data/seed.py`, **`data/near_real_stream.json`** holds 200 records with kube-style timestamps, optional stack prefixes, and JSON-shaped lines; 20 failures are shuffled in. The harness runs the same detect/resolve checks as Experiment 3 with zero false positives expected on the 180 healthy slots.
+
+**Local adapters (not CI)** — From repo root:
+
+- `python adapters/observe.py data/mixed_stream.json` — Watcher only; prints one JSON line per detection.  
+- `python adapters/lab_run.py --dry-run data/near_real_stream.json` — full loop without mutating `infra_state`.  
+- `python adapters/lab_run.py data/mixed_stream.json` — full loop against the simulator (same as harness-style behavior on that file).
+
+Org-facing rollout checklist: **[`docs/GOVERNANCE.md`](../docs/GOVERNANCE.md)** (template).
+
 ---
 
 ## External agent tools (Hermes, [gstack](https://github.com/garrytan/gstack))

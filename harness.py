@@ -13,6 +13,7 @@ if str(ROOT) not in sys.path:
 
 from experiments import run_baseline, run_experiment1, run_experiment2, run_experiment3
 from experiments.run_experiment4 import run as run_experiment4
+from experiments.run_experiment5 import run as run_experiment5
 from integrations.validate import main as integration_contract_check
 from metrics.feedback import log_harness_feedback
 from metrics.recorder import Recorder, reset_database
@@ -77,6 +78,13 @@ async def _main() -> None:
         rows4 = await run_experiment4(K8S_ASSERTIONS, r4)
     finally:
         r4.close()
+
+    # --- Experiment 5: near-real noisy log stream (200 lines, 20 failures) ---
+    r5 = Recorder("experiment5")
+    try:
+        summary5 = await run_experiment5(r5)
+    finally:
+        r5.close()
 
     # --- Console report (spec-style; ASCII for Windows consoles) ---
     print("GHOST POC - Harness Results")
@@ -145,6 +153,23 @@ async def _main() -> None:
         else:
             print(f"{ft:22}{res:8}")
     print(sep)
+    t5 = summary5["total_failures"]
+    det5 = summary5["detected"]
+    fp5 = summary5["false_positives"]
+    hc5 = summary5["healthy_count"]
+    resolv5 = summary5["resolved"]
+    avg5 = summary5["avg_mttr_ms"]
+    print(
+        "EXPERIMENT 5 - Near-real noisy stream (200 records, 20 injected failures)"
+    )
+    print(f"Detected:       {det5}/{t5}   ({100 * det5 / t5:.0f}%)" if t5 else "")
+    print(
+        f"False positives: {fp5}/{hc5}   "
+        f"({100 * fp5 / hc5:.0f}%)" if hc5 else f"False positives: {fp5}"
+    )
+    print(f"Resolved:       {resolv5}/{t5}   ({100 * resolv5 / t5:.0f}%)" if t5 else "")
+    print(f"Avg MTTR:       {avg5:.0f}ms")
+    print(sep)
     print(run_baseline.describe_baseline())
     print(sep)
     print("Full results written to metrics/results.db")
@@ -158,21 +183,31 @@ async def _main() -> None:
         and summary3["resolved"] == summary3["total_failures"]
     )
     e4_ok = all(r["result"] == "PASS" for r in rows4)
+    e5_ok = (
+        summary5["detected"] == summary5["total_failures"]
+        and summary5["false_positives"] == 0
+        and summary5["resolved"] == summary5["total_failures"]
+    )
     run_id = log_harness_feedback(
         {
             "layers_observed": [
                 "log_substring",
                 "log_mixed_stream",
                 "k8s_structured_signal",
+                "log_near_real_noisy",
             ],
             "experiment1_all_pass": e1_ok,
             "experiment2_all_pass": e2_ok,
             "experiment3_all_pass": e3_ok,
             "experiment4_all_pass": e4_ok,
-            "harness_all_pass": e1_ok and e2_ok and e3_ok and e4_ok,
+            "experiment5_all_pass": e5_ok,
+            "harness_all_pass": e1_ok and e2_ok and e3_ok and e4_ok and e5_ok,
             "exp3_detected": summary3["detected"],
             "exp3_total_injected": summary3["total_failures"],
             "exp3_false_positives": summary3["false_positives"],
+            "exp5_detected": summary5["detected"],
+            "exp5_total_injected": summary5["total_failures"],
+            "exp5_false_positives": summary5["false_positives"],
             "policy_versions": {
                 "watcher_skills": watcher_skills.AGENT_VERSION,
                 "healer_skills": healer_skills.AGENT_VERSION,
@@ -195,6 +230,12 @@ async def _main() -> None:
         raise SystemExit("Experiment 3 resolution incomplete")
     if not e4_ok:
         raise SystemExit("Experiment 4 failed")
+    if not e5_ok:
+        if summary5["detected"] != summary5["total_failures"]:
+            raise SystemExit("Experiment 5 detection incomplete")
+        if summary5["false_positives"] != 0:
+            raise SystemExit("Experiment 5 false positives")
+        raise SystemExit("Experiment 5 resolution incomplete")
 
 
 if __name__ == "__main__":

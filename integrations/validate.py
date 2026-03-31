@@ -44,6 +44,10 @@ def main() -> int:
         "data/seed.py",
         "integrations/gstack/SKILL_GHOST_MAINTAINER.md",
         "integrations/hermes/COORDINATOR_PROMPT_SNIPPET.md",
+        "docs/GOVERNANCE.md",
+        "adapters/observe.py",
+        "adapters/lab_run.py",
+        "experiments/run_experiment5.py",
     ]
     missing = [p for p in required_paths if not (ROOT / p).is_file()]
     if missing:

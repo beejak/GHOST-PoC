@@ -15,6 +15,7 @@
     "data/generator.py",
     "data/scenarios.json",
     "experiments/**/*.py",
+    "adapters/**/*.py",
     "metrics/**/*.py",
     "harness.py",
     "integrations/**/*"
@@ -27,6 +28,7 @@
     "data/seed.py",
     "data/generator.py",
     "experiments/**/*.py",
+    "adapters/**/*.py",
     "metrics/**/*.py",
     "harness.py",
     "docs/**/*.md",
@@ -44,7 +46,10 @@
   "shell_allowlist": [
     "python data/seed.py",
     "python harness.py",
-    "python integrations/validate.py"
+    "python integrations/validate.py",
+    "python adapters/observe.py data/mixed_stream.json",
+    "python adapters/lab_run.py --dry-run data/mixed_stream.json",
+    "python adapters/lab_run.py data/mixed_stream.json"
   ],
   "required_after_skills_change": [
     "python data/seed.py",
